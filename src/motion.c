@@ -283,11 +283,29 @@ void motion_fini (motion_t m)
 
 int motion_set_resolution (motion_t m, int res)
 {
-    if (res< 0 || res > 8) {
+    if (res < 0 || res > 8) {
         errno = EINVAL;
         return -1;
     }
     return mcmd (m, "D%d", res);
+}
+
+int motion_set_current (motion_t m, int hold, int run)
+{
+    if (hold < 0 || hold > 100 || run < 0 || run > 100) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "Y%d %d", hold, run);
+}
+
+int motion_set_acceleration (motion_t m, int accel, int decel)
+{
+    if (accel < 0 || accel > 255 || decel < 0 || decel > 255) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "K%d %d", accel, decel);
 }
 
 int motion_set_velocity (motion_t m, int velocity)

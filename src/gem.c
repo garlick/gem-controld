@@ -43,15 +43,20 @@
 char *prog = "";
 
 typedef struct {
-    char *ra_device;
-    int ra_resolution;
-    int ra_track;
-    int ra_slow;
-    int ra_fast;
-    char *dec_device;
-    int dec_resolution;
-    int dec_slow;
-    int dec_fast;
+    char *device;
+    int resolution;
+    int track;
+    int slow;
+    int fast;
+    int ihold;
+    int irun;
+    int accel;
+    int decel;
+} opt_axis_t;
+
+typedef struct {
+    opt_axis_t ra;
+    opt_axis_t dec;
     bool debug;
 } opt_t;
 
@@ -83,14 +88,6 @@ int main (int argc, char *argv[])
     opt_t opt;
 
     memset (&opt, 0, sizeof (opt));
-    opt.ra_resolution = 3;
-    opt.ra_slow = 200;
-    opt.ra_fast = 8000;
-    opt.dec_resolution = 3;
-    opt.dec_slow = 200;
-    opt.dec_fast = 8000;
-    opt.ra_device = xstrdup ("/dev/ttyS0");
-    opt.dec_device = xstrdup ("/dev/ttyS1");
 
     prog = basename (argv[0]);
     log_init (prog);
@@ -127,27 +124,38 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
+    if (!opt.ra.device || !opt.dec.device)
+        msg_exit ("You must configure ra and dec serial devices");
+
     /* Initialize RA
      */
     motion_t ra;
-    ra = motion_init (opt.ra_device, "RA", opt.debug ? MOTION_DEBUG : 0);
+    ra = motion_init (opt.ra.device, "RA", opt.debug ? MOTION_DEBUG : 0);
     if (!ra)
-        err_exit ("ra init: %s", opt.ra_device);
-    if (motion_set_resolution (ra, opt.ra_resolution) < 0)
+        err_exit ("ra init: %s", opt.ra.device);
+    if (motion_set_resolution (ra, opt.ra.resolution) < 0)
         err_exit ("ra set resolution");
-    if (opt.ra_track != 0) {
-        if (motion_set_velocity (ra, opt.ra_track) < 0)
-            err_exit ("ra set velocity: %s", opt.ra_device);
-    }
+    if (motion_set_current (ra, opt.ra.ihold, opt.ra.irun) < 0)
+        err_exit ("ra set current: %s", opt.ra.device);
+    if (motion_set_acceleration (ra, opt.ra.accel, opt.ra.decel) < 0)
+        err_exit ("ra set acceleration: %s", opt.ra.device);
+    if (motion_set_velocity (ra, opt.ra.track) < 0)
+        err_exit ("ra set velocity: %s", opt.ra.device);
 
     /* Initialize DEC
      */
     motion_t dec;
-    dec = motion_init (opt.dec_device, "DEC", opt.debug ? MOTION_DEBUG : 0);
+    dec = motion_init (opt.dec.device, "DEC", opt.debug ? MOTION_DEBUG : 0);
     if (!dec)
-        err_exit ("dec init: %s", opt.dec_device);
-    if (motion_set_resolution (dec, opt.dec_resolution) < 0)
+        err_exit ("dec init: %s", opt.dec.device);
+    if (motion_set_resolution (dec, opt.dec.resolution) < 0)
         err_exit ("dec set resolution");
+    if (motion_set_current (dec, opt.dec.ihold, opt.dec.irun) < 0)
+        err_exit ("dec set current: %s", opt.dec.device);
+    if (motion_set_acceleration (dec, opt.dec.accel, opt.dec.decel) < 0)
+        err_exit ("dec set acceleration: %s", opt.dec.device);
+    if (motion_set_velocity (dec, opt.dec.track) < 0)
+        err_exit ("dec set velocity: %s", opt.dec.device);
 
     /* Respond to button presses.
      */
@@ -158,29 +166,29 @@ int main (int argc, char *argv[])
         bool fast = (keys & 0x8);
         switch (keys & 0x7) {
             case 0: /* nothing */
-                if (motion_set_velocity (ra, opt.ra_track) < 0)
+                if (motion_set_velocity (ra, opt.ra.track) < 0)
                     err_exit ("ra set velocity");
-                if (motion_set_velocity (dec, 0) < 0)
+                if (motion_set_velocity (dec, opt.dec.track) < 0)
                     err_exit ("dec set velocity");
                 break;
             case 1: /* N */
-                if (motion_set_velocity (dec, fast ? opt.dec_fast
-                                                   : opt.dec_slow) < 0)
+                if (motion_set_velocity (dec, fast ? opt.dec.fast
+                                                   : opt.dec.slow) < 0)
                     err_exit ("ra set velocity");
                 break;
             case 2: /* S */
-                if (motion_set_velocity (dec, fast ? -1*opt.dec_fast
-                                                   : -1*opt.dec_slow) < 0)
+                if (motion_set_velocity (dec, fast ? -1*opt.dec.fast
+                                                   : -1*opt.dec.slow) < 0)
                     err_exit ("ra set velocity");
                 break;
             case 3: /* W */
-                if (motion_set_velocity (ra, fast ? opt.ra_fast
-                                                  : opt.ra_slow) < 0)
+                if (motion_set_velocity (ra, fast ? opt.ra.fast
+                                                  : opt.ra.slow) < 0)
                     err_exit ("ra set velocity");
                 break;
             case 4: /* E */
-                if (motion_set_velocity (ra, fast ? -1*opt.ra_fast
-                                                  : -1*opt.ra_slow) < 0)
+                if (motion_set_velocity (ra, fast ? -1*opt.ra.fast
+                                                  : -1*opt.ra.slow) < 0)
                     err_exit ("ra set velocity");
                 break;
             case 5: { /* M1 */
@@ -206,10 +214,36 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+int config_axis (opt_axis_t *a, const char *name, const char *value)
+{
+    if (!strcmp (name, "device")) {
+        if (a->device)
+            free (a->device);
+        a->device = xstrdup (value);
+    } else if (!strcmp (name, "resolution"))
+        a->resolution = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "track"))
+        a->track = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "slow"))
+        a->slow = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "fast"))
+        a->fast = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "ihold"))
+        a->ihold = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "irun"))
+        a->irun= strtoul (value, NULL, 10);
+    else if (!strcmp (name, "accel"))
+        a->accel = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "decel"))
+        a->decel = strtoul (value, NULL, 10);
+    return 0;
+}
+
 int config_cb (void *user, const char *section, const char *name,
                const char *value)
 {
     opt_t *opt = user;
+    int rc = 0;
 
     if (!strcmp (section, "general")) {
         if (!strcmp (name, "debug")) {
@@ -218,34 +252,11 @@ int config_cb (void *user, const char *section, const char *name,
             else if (!strcmp (value, "no"))
                 opt->debug = false;
         }
-    } else if (!strcmp (section, "ra")) {
-        if (!strcmp (name, "device")) {
-            if (opt->ra_device)
-                free (opt->ra_device);
-            opt->ra_device = xstrdup (value);
-        } else if (!strcmp (name, "resolution")) {
-            opt->ra_resolution = strtoul (value, NULL, 10);
-        } else if (!strcmp (name, "track")) {
-            opt->ra_track = strtoul (value, NULL, 10);
-        } else if (!strcmp (name, "slow")) {
-            opt->ra_slow = strtoul (value, NULL, 10);
-        } else if (!strcmp (name, "fast")) {
-            opt->ra_fast = strtoul (value, NULL, 10);
-        }
-    } else if (!strcmp (section, "dec")) {
-        if (!strcmp (name, "device")) {
-            if (opt->dec_device)
-                free (opt->dec_device);
-            opt->dec_device = xstrdup (value);
-        } else if (!strcmp (name, "resolution")) {
-            opt->dec_resolution = strtoul (value, NULL, 10);
-        } else if (!strcmp (name, "slow")) {
-            opt->dec_slow = strtoul (value, NULL, 10);
-        } else if (!strcmp (name, "fast")) {
-            opt->dec_fast = strtoul (value, NULL, 10);
-        }
-    }
-    return 0;
+    } else if (!strcmp (section, "ra"))
+        rc = config_axis (&opt->ra, name, value);
+    else if (!strcmp (section, "dec"))
+        rc = config_axis (&opt->dec, name, value);
+    return rc;
 }
 
 
