@@ -64,6 +64,7 @@ char *config_filename = NULL;
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
+motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -124,38 +125,8 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-    if (!opt.ra.device || !opt.dec.device)
-        msg_exit ("You must configure ra and dec serial devices");
-
-    /* Initialize RA
-     */
-    motion_t ra;
-    ra = motion_init (opt.ra.device, "RA", opt.debug ? MOTION_DEBUG : 0);
-    if (!ra)
-        err_exit ("ra init: %s", opt.ra.device);
-    if (motion_set_resolution (ra, opt.ra.resolution) < 0)
-        err_exit ("ra set resolution");
-    if (motion_set_current (ra, opt.ra.ihold, opt.ra.irun) < 0)
-        err_exit ("ra set current: %s", opt.ra.device);
-    if (motion_set_acceleration (ra, opt.ra.accel, opt.ra.decel) < 0)
-        err_exit ("ra set acceleration: %s", opt.ra.device);
-    if (motion_set_velocity (ra, opt.ra.track) < 0)
-        err_exit ("ra set velocity: %s", opt.ra.device);
-
-    /* Initialize DEC
-     */
-    motion_t dec;
-    dec = motion_init (opt.dec.device, "DEC", opt.debug ? MOTION_DEBUG : 0);
-    if (!dec)
-        err_exit ("dec init: %s", opt.dec.device);
-    if (motion_set_resolution (dec, opt.dec.resolution) < 0)
-        err_exit ("dec set resolution");
-    if (motion_set_current (dec, opt.dec.ihold, opt.dec.irun) < 0)
-        err_exit ("dec set current: %s", opt.dec.device);
-    if (motion_set_acceleration (dec, opt.dec.accel, opt.dec.decel) < 0)
-        err_exit ("dec set acceleration: %s", opt.dec.device);
-    if (motion_set_velocity (dec, opt.dec.track) < 0)
-        err_exit ("dec set velocity: %s", opt.dec.device);
+    motion_t ra = init_axis (&opt.ra, "RA", opt.debug);
+    motion_t dec = init_axis (&opt.dec, "DEC", opt.debug);
 
     /* Respond to button presses.
      */
@@ -212,6 +183,24 @@ int main (int argc, char *argv[])
     motion_fini (ra); 
 
     return 0;
+}
+
+motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
+{
+    motion_t m;
+    if (!a->device)
+        msg_exit ("%s: no serial device configured", name);
+    if (!(m = motion_init (a->device, name, debug ? MOTION_DEBUG : 0)))
+        err_exit ("%s: init %s", name, a->device);
+    if (motion_set_resolution (m, a->resolution) < 0)
+        err_exit ("%s: set resolution", name);
+    if (motion_set_current (m, a->ihold, a->irun) < 0)
+        err_exit ("%s: set current", name);
+    if (motion_set_acceleration (m, a->accel, a->decel) < 0)
+        err_exit ("%s: set acceleration", name);
+    if (motion_set_velocity (m, a->track) < 0)
+        err_exit ("%s: set velocity", name);
+    return m;
 }
 
 int config_axis (opt_axis_t *a, const char *name, const char *value)
