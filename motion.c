@@ -1,103 +1,322 @@
+/* motion.c - communicate with Intelligent Motion Devices IM483I indexer */
+
 #include <fcntl.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <errno.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
+#include <stdio.h>
+#include <assert.h>
+#include <stdarg.h>
+#include <math.h>
 
 #include "motion.h"
+
+struct motion_struct {
+    int fd;
+    char *devname;
+    char *name;
+    int flags;
+};
+
+const int read_timeout_sec = 2;
+const int max_cmdline = 80;
+
+/* Translate funny characters into readable debug output.
+ * Caller must free resulting string.
+ */
+static char *toliteral (const char *s)
+{
+    int len = strlen (s) * 4 + 1;
+    char *buf;
+    const char *p = s;
+
+    if ((buf = malloc (len))) {
+        memset (buf, 0, len);
+        while (*p) {
+            if (*p == '\r')
+                sprintf (buf + strlen (buf), "\\r");
+            else if (*p < ' ' || *p > '~')
+                sprintf (buf + strlen (buf), "\\%.3o", *p);
+            else
+                buf[strlen (buf)] = *p;
+            p++;
+            
+        }
+    }
+    return buf;
+}
 
 static int dgetc (int fd)
 {
     uint8_t c;
-    if (read (fd, &c, 1) != 1)
+    int n = read (fd, &c, 1);
+    if (n == 0)
+        errno = ETIMEDOUT;
+    if (n <= 0)
         return -1;
     return c;
 }
 
-static void trim (char *s)
-{
-    int len = strlen (s);
-    while (len > 0 && isspace (s[len - 1])) {
-        s[len - 1] = '\0';
-        len--;
-    }
-}
-
-/* Read a \n-termiated line and return it without terminating whitespace.
- * The result will always be NULL terminated.
- * Return NULL on error, e.g. read(2) returns <= 0, or buf exhausted.
+/* Read a line ending in \r\n from 'fd' and return it, without the \r\n,
+ * using buf[size] as storage.  If there is a read error or buf overflow,
+ * return NULL.
  */
-static char *dgets (int fd, char *buf, int size)
+static char *mgets (motion_t m, char *buf, int size)
 {
-    int len = 0;
     int c;
-    do {
-        if (len >= size - 2)
-            return NULL; /* overflow */
-        if ((c = dgetc (fd)) < 0)
-            return NULL; /* read error/EOF */
-        buf[len++] = c;
-    } while (c != '\n');
-    buf[len] = '\0';
-    trim (buf);
+    int i = 0;
+    int term = 0;
+
+    assert (size > 1);
+    memset (buf, 0, size);
+    while (term < 2 && i < size - 2 && (c = dgetc (m->fd)) != -1) {
+        if (c == '\r' || c == '\n')
+            term++;
+        else {
+            term = 0;
+            buf[i++] = c;
+        }
+    }
+    if (term != 2)
+        return NULL;
+    buf[i] = '\0';
+    if (m->flags & MOTION_DEBUG) {
+        char *cpy = toliteral (buf);
+        fprintf (stderr, "%s<'%s'\n", m->name, cpy);
+        free (cpy);
+    }
     return buf;
 }
 
-int motion_init (const char *devname)
+static int mputs (motion_t m, const char *s)
 {
-    int fd, saved_errno, flags;
-    struct termios tio;
-    uint8_t c;
-    char buf[80];
-
-    if ((fd = open(devname, O_RDWR | O_NOCTTY)) < 0)
-        goto error;
-    if (tcgetattr(fd, &tio) < 0)
-        goto error;
-    cfsetspeed(&tio, B9600);/* 9600,8N1*/
-    tio.c_cflag &= ~PARENB;
-    tio.c_cflag &= ~CSTOPB;
-    tio.c_cflag &= ~CSIZE;
-    tio.c_cflag |= CS8;
-    if (tcsetattr(fd, TCSANOW, &tio) < 0)
-        goto error;
-
-    if (dprintf (fd, "\003") < 0)   /* send ctrl-C to reset IM483I */
-        goto error;
-    usleep (1000*200);              /* (wait 200ms to come out of reset) */
-    if (dprintf (fd, " ") < 0)      /* send space to initiate comms */
-        goto error;
-    if (dgets (fd, buf, sizeof (buf)) < 0) /* read "4038 ADVANCED...INC" */
-        goto error;
-    if (dgets (fd, buf, sizeof (buf)) < 0) /* read "MAX-2000 v1.15i" */
-        goto error;
-    if (dprintf (fd, "\r") < 0)     /* send \r to elicit a # response */
-        goto error;
-    if (dgets (fd, buf, sizeof (buf)) < 0) /* read "#" */
-        goto error;
-    if (dprintf (fd, "A8") < 0)     /* turn off green LED wired to OUTPUT 1 */
-        goto error;
-#if 0
-    flags = fcntl (fd, F_GETFD);
-    if (flags < 0)
-        goto error;
-    if (fcntl (fd, F_SETFD, flags | O_NONBLOCK) < 0)
-        goto error;
-#endif
-    return fd;
-error:
-    saved_errno = errno;
-    motion_fini (fd);
-    errno = saved_errno;
-    return -1;
+    if (m->flags & MOTION_DEBUG) {
+        char *cpy = toliteral (s);
+        fprintf (stderr, "%s>'%s'\n", m->name, cpy);
+        free (cpy);
+    }
+    return dprintf (m->fd, "%s", s);
 }
 
-void motion_fini (int fd)
+static int mprintf (motion_t m, const char *fmt, ...)
 {
-    if (fd >= 0)
-        (void)close (fd);
+    va_list ap;
+    char *s = NULL;
+    int rc;
+
+    va_start (ap, fmt);
+    if (vasprintf (&s, fmt, ap) < 0)
+        return -1;
+    va_end (ap);
+    rc = mputs (m, s);
+    free (s);
+    return rc;
+}
+
+/* Send a \r, receive a #.
+ */
+static int mping (motion_t m, int count)
+{
+    int i;
+    char buf[max_cmdline];
+    int rc = -1;
+
+    for (i = 0; i < count; i++) {
+        if (mputs (m, "\r") < 0 || !mgets (m, buf, sizeof (buf)))
+            goto done;
+        if (strcmp (buf, "#") != 0) {
+            errno = EPROTO;
+            goto done;
+        }
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
+static void mdelay (motion_t m, int msec)
+{
+    if (m->flags & MOTION_DEBUG)
+        fprintf (stderr, "%s:delay %dms\n", m->name, msec);
+    usleep (1000*msec);
+}
+
+/* Send command + \r, receive back echoed command.
+ */
+static int mcmd (motion_t m, const char *fmt, ...)
+{
+    va_list ap;
+    int rc = -1;
+    char *cmd = NULL;
+    char buf[max_cmdline];
+
+    va_start (ap, fmt);
+    if (vasprintf (&cmd, fmt, ap) < 0)
+        return -1;
+    va_end (ap);
+    if (mprintf (m, "%s\r", cmd) < 0)
+        goto done;
+    if (!mgets (m, buf, sizeof (buf)))
+        goto done;
+    if (strcmp (buf, cmd) != 0) {
+        errno = EPROTO;
+        goto done;
+    }
+    rc = 0;
+done:
+    if (cmd)
+        free (cmd);
+    return rc;
+}
+
+/* Open/configure the serial port for "pretty raw with timeout".
+ */
+static int mopen (motion_t m)
+{
+    struct termios tio;
+
+    if ((m->fd = open(m->devname, O_RDWR | O_NOCTTY)) < 0)
+        return -1;
+    memset (&tio, 0, sizeof (tio)); 
+    tio.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
+    tio.c_iflag = IGNPAR;
+    tio.c_oflag = 0;
+    tio.c_lflag = 0;
+    tio.c_cc[VTIME] = 10 * read_timeout_sec;
+    tio.c_cc[VMIN] = 0;
+    tcflush (m->fd, TCIFLUSH);
+    return tcsetattr(m->fd, TCSANOW, &tio);
+}
+
+motion_t motion_init (const char *devname, const char *name, int flags)
+{
+    motion_t m;
+    int saved_errno;
+    char buf[max_cmdline];
+    int i;
+
+    if (!(m = malloc (sizeof (*m))) || !(m->devname = strdup (devname))
+                                    || !(m->name = strdup (name))) {
+        errno = ENOMEM;
+        goto error;
+    }
+    m->flags = flags;
+    m->fd = -1;
+    if (mopen (m) < 0)
+        goto error;
+
+    /* Opening dialog
+     */
+    if (mputs (m, "\003") < 0)      /* send ctrl-C to reset */
+        goto error;
+    mdelay (m, 200);                /* wait for device to come out of reset */
+    if (mputs (m, " ") < 0)         /* send space to initiate comms */
+        goto error;
+    for (i = 0; i < 2; i++) {       /* eat 2 lines of init output */
+        if (!mgets (m, buf, sizeof (buf)))
+            goto error;
+    }
+    if (m->flags & MOTION_DEBUG) {
+        if (mprintf (m, "X\r") < 0) /* eXamine parameters */
+            goto error;
+        for (i = 0; i < 2; i++) {   /* expect 2 lines (no encoder/auto-pos) */
+            if (!mgets (m, buf, sizeof (buf)))
+                goto error;
+        }
+    }
+    if (mcmd (m, "A%d", 0x8) < 0)   /* turn off green LED on OUTPUT-1 */
+        goto error;
+    if (mcmd (m, "M0") < 0)         /* stop any motion */
+        goto error;
+    if (mping (m, 2) < 0)
+        goto error;
+    return m;
+error:
+    saved_errno = errno;
+    motion_fini (m);
+    errno = saved_errno;
+    return NULL;
+}
+
+void motion_fini (motion_t m)
+{
+    if (m) {
+        if (m->fd >= 0) {
+            (void)mcmd (m, "M0");
+            (void)close (m->fd);
+        }
+        if (m->devname)
+            free (m->devname);
+        if (m->name)
+            free (m->name);
+        free (m);
+    }
+}
+
+int motion_set_velocity (motion_t m, int velocity)
+{
+    if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "M%d", velocity);
+}
+
+int motion_get_position (motion_t m, double *position)
+{
+    char buf[max_cmdline];
+    float pos;
+
+    if (mprintf (m, "Z0\r") < 0)
+        return -1;
+    if (!mgets (m, buf, sizeof (buf)))
+        return -1;
+    if (sscanf (buf, "Z0 %f", &pos) != 1)
+        return -1;
+    *position = (double)pos;
+    return 0;
+}
+
+int motion_set_position (motion_t m, double position)
+{
+    if (fabs (position) > 8388607.9) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "R%+.2f", position);
+}
+
+int motion_get_status (motion_t m, uint8_t *status)
+{
+    char buf[max_cmdline];
+    int s;
+
+    if (mprintf (m, "^\r") < 0)
+        return -1;
+    if (!mgets (m, buf, sizeof (buf)))
+        return -1;
+    if (sscanf (buf, "^ %d", &s) != 1)
+        return -1;
+    *status  = s;
+    return 0;
+}
+
+int motion_set_index (motion_t m, double offset)
+{
+    if (fabs (offset) < 0.01 || fabs (offset) > 8388607.99) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "%+.2f", offset);
+}
+
+int motion_set_origin (motion_t m)
+{
+    return mcmd (m, "O");
 }
 
 /*
