@@ -1,8 +1,8 @@
-CFLAGS = -Wall -D_GNU_SOURCE=1
-OBJS = gem.o motion.o
+include Makefile.inc
 
-gem: $(OBJS)
-	$(CC) -o $@ $^ -lev -lm
+SUBDIRS = libutil libini src
 
-clean:
-	rm -f $(OBJS) gem
+all:
+
+all clean install:
+	for dir in $(SUBDIRS); do make -C $$dir $@; done
