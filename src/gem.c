@@ -14,6 +14,7 @@
 #include "libutil/xzmalloc.h"
 
 #include "motion.h"
+#include "gpio.h"
 
 char *prog = "";
 
@@ -93,6 +94,32 @@ int main (int argc, char *argv[])
     msg ("ra_track: %d", opt.ra_track);
     msg ("dec_device: %s", opt.dec_device);
     msg ("debug: %s", opt.debug ? "yes" : "no");
+
+    gpio_init ();
+
+    /* Initialize RA
+     */
+    motion_t ra;
+    ra = motion_init (opt.ra_device, "RA", opt.debug ? MOTION_DEBUG : 0);
+    if (!ra)
+        err_exit ("ra init: %s", opt.ra_device);
+    if (opt.ra_track != 0) {
+        if (motion_set_velocity (ra, opt.ra_track) < 0)
+            err_exit ("ra set velocity: %s", opt.ra_device);
+    }
+
+    motion_t dec;
+    dec = motion_init (opt.dec_device, "DEC", opt.debug ? MOTION_DEBUG : 0);
+
+    int keys;
+    for (;;) {
+        keys = gpio_event ();
+        msg ("gpio: 0x%x", keys);
+    }
+
+    gpio_fini ();
+
+    //motion_fini (ra); 
 
     return 0;
 }
