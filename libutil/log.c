@@ -40,7 +40,7 @@
 
 #include "log.h"
 
-static char *prog = "flux";
+static char *prog = "";
 
 typedef struct {
     char *s;

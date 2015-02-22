@@ -1,4 +1,4 @@
-/*****************************************************************************
+/*****************************************************************************\
  *  Copyright (C) 2015 Jim Garlick
  *  Written by Jim Garlick <garlick.jim@gmail.com>
  *  All Rights Reserved.
@@ -7,19 +7,20 @@
  *  For details, see <https://github.com/garlick/gem-controld>
  *
  *  This program is free software; you can redistribute it and/or modify it
- *  under the terms of the GNU General Public License (as published by the
- *  Free Software Foundation) version 2, dated June 1991.
+ *  under the terms of the GNU General Public License as published by the Free
+ *  Software Foundation; either version 2 of the license, or (at your option)
+ *  any later version.
  *
  *  This program is distributed in the hope that it will be useful, but
  *  WITHOUT ANY WARRANTY; without even the IMPLIED WARRANTY OF MERCHANTABILITY
  *  or FITNESS FOR A PARTICULAR PURPOSE. See the terms and conditions of the
  *  GNU General Public License for more details.
  *
- *  You should have received a copy of the GNU General Public License
- *  along with this program; if not, write to the Free Software Foundation,
- *  Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA or see
- *  <http://www.gnu.org/licenses/>.
- *****************************************************************************/
+ *  You should have received a copy of the GNU General Public License along
+ *  with this program; if not, write to the Free Software Foundation, Inc.,
+ *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+ *  See also:  http://www.gnu.org/licenses/
+\*****************************************************************************/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -84,7 +85,11 @@ int main (int argc, char *argv[])
     opt.ra_fast = 8000;
     opt.dec_slow = 200;
     opt.dec_fast = 8000;
+    opt.ra_device = xstrdup ("/dev/ttyS0");
+    opt.dec_device = xstrdup ("/dev/ttyS1");
+
     prog = basename (argv[0]);
+    log_init (prog);
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -116,12 +121,6 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (!opt.ra_device)
-        opt.ra_device = xstrdup ("/dev/ttyS0");
-    if (!opt.dec_device)
-        opt.dec_device = xstrdup ("/dev/ttyS1");
-
-    gpio_init ();
 
     /* Initialize RA
      */
@@ -141,6 +140,7 @@ int main (int argc, char *argv[])
 
     /* Respond to button presses.
      */
+    gpio_init ();
     bool bye = false;
     while (!bye) {
         int keys = gpio_event ();
@@ -177,7 +177,7 @@ int main (int argc, char *argv[])
                 if (motion_get_position (ra, &x) < 0
                  || motion_get_position (dec, &y) < 0)
                     err_exit ("failed to get x,y position");
-                msg ("ra=%.1f dec=%.1f", x, y);
+                msg ("(%.0f,%.0f)", x, y);
                 break;
             }
             case 6: /* M2 */
@@ -187,7 +187,6 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-
     gpio_fini ();
 
     motion_fini (ra); 
