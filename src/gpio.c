@@ -1,10 +1,10 @@
 /*****************************************************************************
- *  Copyright (C) 2013 Jim Garlick
+ *  Copyright (C) 2015 Jim Garlick
  *  Written by Jim Garlick <garlick.jim@gmail.com>
  *  All Rights Reserved.
  *
- *  This file is part of pi-gpio-uinput.
- *  For details, see <https://github.com/garlick/pi-gpio-uinput>
+ *  This file is part of gem-controld
+ *  For details, see <https://github.com/garlick/gem-controld>
  *
  *  This program is free software; you can redistribute it and/or modify it
  *  under the terms of the GNU General Public License (as published by the
@@ -20,19 +20,17 @@
  *  Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA or see
  *  <http://www.gnu.org/licenses/>.
  *****************************************************************************/
-/* gpio.c - return a stream of keypress events from pi GPIO */
+
+/* gpio.c - poll a set of gpio lines */
 
 /* Inputs are configured to interrupt on rising and falling edges.
- * We call poll(2), which blocks until one of the inputs receives a
- * POLLPRI event.  When poll returns, we examine the pollfd array
- * to determine which button changed state and return that as a
- * keypress event to our main program, which feeds that to the uinput
- * driver.
- *
- * Inputs read 0 when button is depressed, 1 when released.
- * We have to record the previous state and, after poll(2) returns
- * indicating it changed, wait DEBOUNCE_MS for the state to settle
- * before reading it and comparing to the previous state.
+ * gpio_event() blocks until one of the inputs changes state.  It calls
+ * poll(2), blocking until one of the inputs receives a POLLPRI event.
+ * When poll returns, we examine the pollfd array to determine which input
+ * changed state.  If after DEBOUNCE_MS milliseconds there is still a
+ * change in state, it is returned as a mask.  The debounce period is set
+ * up as a poll timeout, allowing multiple trips through the poll loop during
+ * this period without returning anything.
  */
 
 
@@ -280,9 +278,12 @@ int gpio_event (void)
             monoclock (&t0);
             timeout = DEBOUNCE_MS;
         }
-        if (timeout != -1 && (timeout = DEBOUNCE_MS - monosince (t0)) <= 0) {
-            timeout = -1;
-            word = getword ();
+        if (timeout != -1) {
+            timeout = DEBOUNCE_MS - monosince (t0);
+            if (timeout <= 0) { /* expired */
+                timeout = -1;
+                word = getword ();
+            }
         }
     }
     lastword = word;
