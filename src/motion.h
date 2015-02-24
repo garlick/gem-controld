@@ -19,6 +19,10 @@ motion_t motion_init (const char *devname, const char *name, int flags);
  */
 void motion_fini (motion_t m);
 
+/* Set microstep resolution (0:8)
+ */
+int motion_set_resolution (motion_t m, int resolution);
+
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.
  */

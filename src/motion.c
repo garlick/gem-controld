@@ -46,7 +46,7 @@ struct motion_struct {
     int flags;
 };
 
-const int read_timeout_sec = 2;
+const int read_timeout_sec = 5;
 const int max_cmdline = 80;
 
 /* Translate funny characters into readable debug output.
@@ -279,6 +279,15 @@ void motion_fini (motion_t m)
             free (m->name);
         free (m);
     }
+}
+
+int motion_set_resolution (motion_t m, int res)
+{
+    if (res< 0 || res > 8) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "D%d", res);
 }
 
 int motion_set_velocity (motion_t m, int velocity)

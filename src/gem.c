@@ -44,10 +44,12 @@ char *prog = "";
 
 typedef struct {
     char *ra_device;
+    int ra_resolution;
     int ra_track;
     int ra_slow;
     int ra_fast;
     char *dec_device;
+    int dec_resolution;
     int dec_slow;
     int dec_fast;
     bool debug;
@@ -81,8 +83,10 @@ int main (int argc, char *argv[])
     opt_t opt;
 
     memset (&opt, 0, sizeof (opt));
+    opt.ra_resolution = 3;
     opt.ra_slow = 200;
     opt.ra_fast = 8000;
+    opt.dec_resolution = 3;
     opt.dec_slow = 200;
     opt.dec_fast = 8000;
     opt.ra_device = xstrdup ("/dev/ttyS0");
@@ -120,7 +124,8 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-
+    if (optind < argc)
+        usage ();
 
     /* Initialize RA
      */
@@ -128,6 +133,8 @@ int main (int argc, char *argv[])
     ra = motion_init (opt.ra_device, "RA", opt.debug ? MOTION_DEBUG : 0);
     if (!ra)
         err_exit ("ra init: %s", opt.ra_device);
+    if (motion_set_resolution (ra, opt.ra_resolution) < 0)
+        err_exit ("ra set resolution");
     if (opt.ra_track != 0) {
         if (motion_set_velocity (ra, opt.ra_track) < 0)
             err_exit ("ra set velocity: %s", opt.ra_device);
@@ -137,6 +144,10 @@ int main (int argc, char *argv[])
      */
     motion_t dec;
     dec = motion_init (opt.dec_device, "DEC", opt.debug ? MOTION_DEBUG : 0);
+    if (!dec)
+        err_exit ("dec init: %s", opt.dec_device);
+    if (motion_set_resolution (dec, opt.dec_resolution) < 0)
+        err_exit ("dec set resolution");
 
     /* Respond to button presses.
      */
@@ -183,12 +194,13 @@ int main (int argc, char *argv[])
             case 6: /* M2 */
                 break;
             case 7: /* M1+M2 */
-                bye = true;
+                //bye = true;
                 break;
         }
     }
     gpio_fini ();
 
+    motion_fini (dec); 
     motion_fini (ra); 
 
     return 0;
@@ -211,6 +223,8 @@ int config_cb (void *user, const char *section, const char *name,
             if (opt->ra_device)
                 free (opt->ra_device);
             opt->ra_device = xstrdup (value);
+        } else if (!strcmp (name, "resolution")) {
+            opt->ra_resolution = strtoul (value, NULL, 10);
         } else if (!strcmp (name, "track")) {
             opt->ra_track = strtoul (value, NULL, 10);
         } else if (!strcmp (name, "slow")) {
@@ -223,6 +237,8 @@ int config_cb (void *user, const char *section, const char *name,
             if (opt->dec_device)
                 free (opt->dec_device);
             opt->dec_device = xstrdup (value);
+        } else if (!strcmp (name, "resolution")) {
+            opt->dec_resolution = strtoul (value, NULL, 10);
         } else if (!strcmp (name, "slow")) {
             opt->dec_slow = strtoul (value, NULL, 10);
         } else if (!strcmp (name, "fast")) {
