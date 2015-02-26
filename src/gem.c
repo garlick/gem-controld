@@ -58,6 +58,7 @@ typedef struct {
     opt_axis_t ra;
     opt_axis_t dec;
     bool debug;
+    int gpio[4];
 } opt_t;
 
 char *config_filename = NULL;
@@ -130,10 +131,10 @@ int main (int argc, char *argv[])
 
     /* Respond to button presses.
      */
-    gpio_init ();
+    gpio_t g = gpio_init (opt.gpio, 4);
     bool bye = false;
     while (!bye) {
-        int keys = gpio_event ();
+        int keys = gpio_event (g);
         bool fast = (keys & 0x8);
         switch (keys & 0x7) {
             case 0: /* nothing */
@@ -177,7 +178,7 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    gpio_fini ();
+    gpio_fini (g);
 
     motion_fini (dec); 
     motion_fini (ra); 
@@ -245,6 +246,16 @@ int config_cb (void *user, const char *section, const char *name,
         rc = config_axis (&opt->ra, name, value);
     else if (!strcmp (section, "dec"))
         rc = config_axis (&opt->dec, name, value);
+    else if (!strcmp (section, "gpio")) {
+        if (!strcmp (name, "bit0"))
+            opt->gpio[0] = strtoul (value, NULL, 10);
+        else if (!strcmp (name, "bit1"))
+            opt->gpio[1] = strtoul (value, NULL, 10);
+        else if (!strcmp (name, "bit2"))
+            opt->gpio[2] = strtoul (value, NULL, 10);
+        else if (!strcmp (name, "bit3"))
+            opt->gpio[3] = strtoul (value, NULL, 10);
+    }
     return rc;
 }
 

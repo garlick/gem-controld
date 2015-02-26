@@ -47,6 +47,9 @@
 
 #include "gpio.h"
 
+#include "libutil/xzmalloc.h"
+#include "libutil/log.h"
+
 #ifndef PATH_MAX
 #define PATH_MAX    1024
 #endif
@@ -61,13 +64,10 @@ typedef struct {
     int val;    /* current state */
 } map_t;
 
-static map_t map[] = {
-    { .pin = 66,   .bit = 3,   .fd = -1, },
-    { .pin = 67,   .bit = 2,   .fd = -1, },
-    { .pin = 68,   .bit = 0,   .fd = -1, },
-    { .pin = 69,   .bit = 1,   .fd = -1, },
+struct gpio_struct {
+    map_t *map;
+    int maplen;
 };
-static const int maplen = sizeof (map) / sizeof (map[0]);
 
 static void _export (int pin)
 {
@@ -194,27 +194,35 @@ static int _open_value (int pin)
     return fd;
 }
 
-void gpio_init (void)
+gpio_t gpio_init (int *gpio, int len)
 {
+    gpio_t g = xzmalloc (sizeof (*g));
     int i;
 
-    for (i = 0; i < maplen; i++) {
-        _export (map[i].pin);
-        _input (map[i].pin);
-        _edge (map[i].pin);
-        map[i].fd = _open_value (map[i].pin);
-        map[i].val = _read_value (map[i].fd);
+    g->map = xzmalloc (sizeof (map_t)*len);
+    g->maplen = len;
+    for (i = 0; i < len; i++) {
+        g->map[i].pin = gpio[i];
+        g->map[i].bit = i;
+        _export (g->map[i].pin);
+        _input (g->map[i].pin);
+        _edge (g->map[i].pin);
+        g->map[i].fd = _open_value (g->map[i].pin);
+        g->map[i].val = _read_value (g->map[i].fd);
     }
+    return g;
 }
 
-void gpio_fini (void)
+void gpio_fini (gpio_t g)
 {
     int i;
-    for (i = 0; i < maplen; i++) {
-        if (map[i].fd != -1)
-            close (map[i].fd);
-            _unexport (map[i].pin);
+    for (i = 0; i < g->maplen; i++) {
+        if (g->map[i].fd != -1)
+            close (g->map[i].fd);
+        _unexport (g->map[i].pin);
     }
+    free (g->map);
+    free (g);
 }
 
 void monoclock (struct timespec *ts)
@@ -233,47 +241,47 @@ int monosince (struct timespec t0)
          - (t0.tv_sec * 1E3 + t0.tv_nsec * 1E-6);
 }
 
-int getword (void)
+int getword (gpio_t g)
 {
     int i, val = 0;
 
-    for (i = 0; i < maplen; i++) {
-        if (map[i].val)
-            val |= (1<<map[i].bit);
+    for (i = 0; i < g->maplen; i++) {
+        if (g->map[i].val)
+            val |= (1<<g->map[i].bit);
     }
     return val;
 }
 
-int gpio_event (void)
+int gpio_event (gpio_t g)
 {
     static struct pollfd *pfd = NULL;
     static int lastword = 0xff; /* impossible initial value */
     int timeout = -1;
     struct timespec t0;
-    int word = getword ();;
+    int word = getword (g);
     int i;
 
     if (pfd == NULL) {
-        pfd = malloc (sizeof (pfd[0]) * maplen);
+        pfd = malloc (sizeof (pfd[0]) * g->maplen);
         if (!pfd) {
             fprintf (stderr, "out of memory\n");
             exit(1);
         } 
-        memset (pfd, 0, sizeof (pfd[0]) * maplen);
-        for (i = 0; i < maplen; i++) {
-            pfd[i].fd = map[i].fd;
+        memset (pfd, 0, sizeof (pfd[0]) * g->maplen);
+        for (i = 0; i < g->maplen; i++) {
+            pfd[i].fd = g->map[i].fd;
             pfd[i].events = POLLPRI;
         }
     }
     while (word == lastword) {
-        int n = poll (pfd, maplen, timeout);
+        int n = poll (pfd, g->maplen, timeout);
         if (n < 0) {
             perror ("poll");
             exit (1);
         }
-        for (i = 0; i < maplen; i++) {
+        for (i = 0; i < g->maplen; i++) {
             if ((pfd[i].revents & POLLPRI))
-                map[i].val = _read_value (pfd[i].fd);
+                g->map[i].val = _read_value (pfd[i].fd);
         }
         if (n > 0 && timeout == -1) {
             monoclock (&t0);
@@ -283,7 +291,7 @@ int gpio_event (void)
             timeout = DEBOUNCE_MS - monosince (t0);
             if (timeout <= 0) { /* expired */
                 timeout = -1;
-                word = getword ();
+                word = getword (g);
             }
         }
     }
