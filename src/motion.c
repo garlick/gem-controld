@@ -281,6 +281,11 @@ void motion_fini (motion_t m)
     }
 }
 
+const char *motion_name (motion_t m)
+{
+    return m->name;
+}
+
 int motion_set_resolution (motion_t m, int res)
 {
     if (res < 0 || res > 8) {
@@ -288,6 +293,15 @@ int motion_set_resolution (motion_t m, int res)
         return -1;
     }
     return mcmd (m, "D%d", res);
+}
+
+int motion_set_mode (motion_t m, int mode)
+{
+    if (mode != 0 && mode != 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "H%d", mode);
 }
 
 int motion_set_current (motion_t m, int hold, int run)

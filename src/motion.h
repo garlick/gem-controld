@@ -19,6 +19,8 @@ motion_t motion_init (const char *devname, const char *name, int flags);
  */
 void motion_fini (motion_t m);
 
+const char *motion_name (motion_t m);
+
 /* Set microstep resolution (0:8)
  */
 int motion_set_resolution (motion_t m, int resolution);
@@ -30,6 +32,11 @@ int motion_set_current (motion_t m, int hold, int run);
 /* Set acceleration/deceleration slope (0-255)
  */
 int motion_set_acceleration (motion_t m, int accel, int decel);
+
+/* Set resolution mode
+ * 0=fixed, 1=auto
+ */
+int motion_set_mode (motion_t m, int mode);
 
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.

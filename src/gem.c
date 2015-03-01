@@ -44,6 +44,7 @@ char *prog = "";
 
 typedef struct {
     char *device;
+    int mode;
     int resolution;
     int track;
     int slow;
@@ -65,7 +66,9 @@ char *config_filename = NULL;
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
-motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
+motion_t axis_init (opt_axis_t *a, const char *name, bool debug);
+void axis_slew (motion_t m, opt_axis_t *a, bool fast, bool reverse);
+void axis_track (motion_t m, opt_axis_t *a);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -80,7 +83,9 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE         set path to config file\n"
+"    -d,--debug               emit verbose debugging to stderr\n"
 );
+    exit (1);
 }
 
 int main (int argc, char *argv[])
@@ -126,8 +131,8 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-    motion_t ra = init_axis (&opt.ra, "RA", opt.debug);
-    motion_t dec = init_axis (&opt.dec, "DEC", opt.debug);
+    motion_t ra = axis_init (&opt.ra, "RA", opt.debug);
+    motion_t dec = axis_init (&opt.dec, "DEC", opt.debug);
 
     /* Respond to button presses.
      */
@@ -138,30 +143,20 @@ int main (int argc, char *argv[])
         bool fast = (keys & 0x8);
         switch (keys & 0x7) {
             case 0: /* nothing */
-                if (motion_set_velocity (ra, opt.ra.track) < 0)
-                    err_exit ("ra set velocity");
-                if (motion_set_velocity (dec, opt.dec.track) < 0)
-                    err_exit ("dec set velocity");
+                axis_track (ra, &opt.ra);
+                axis_track (dec, &opt.dec);
                 break;
             case 1: /* N */
-                if (motion_set_velocity (dec, fast ? opt.dec.fast
-                                                   : opt.dec.slow) < 0)
-                    err_exit ("ra set velocity");
+                axis_slew (dec, &opt.dec, fast, false);
                 break;
             case 2: /* S */
-                if (motion_set_velocity (dec, fast ? -1*opt.dec.fast
-                                                   : -1*opt.dec.slow) < 0)
-                    err_exit ("ra set velocity");
+                axis_slew (dec, &opt.dec, fast, true);
                 break;
             case 3: /* W */
-                if (motion_set_velocity (ra, fast ? opt.ra.fast
-                                                  : opt.ra.slow) < 0)
-                    err_exit ("ra set velocity");
+                axis_slew (ra, &opt.ra, fast, false);
                 break;
             case 4: /* E */
-                if (motion_set_velocity (ra, fast ? -1*opt.ra.fast
-                                                  : -1*opt.ra.slow) < 0)
-                    err_exit ("ra set velocity");
+                axis_slew (ra, &opt.ra, fast, true);
                 break;
             case 5: { /* M1 */
                 double x, y;
@@ -186,21 +181,39 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
+void axis_slew (motion_t m, opt_axis_t *a, bool fast, bool reverse)
+{
+    const char *name = motion_name (m);
+    int velocity = (fast ? a->fast : a->slow) * (reverse ? -1 : 1);
+
+    if (motion_set_velocity (m, velocity) < 0)
+        err_exit ("%s: set velocity", name);
+}
+
+void axis_track (motion_t m, opt_axis_t *a)
+{
+    const char *name = motion_name (m);
+
+    if (motion_set_velocity (m, a->track) < 0)
+        err_exit ("%s: set velocity", name);
+}
+
+motion_t axis_init (opt_axis_t *a, const char *name, bool debug)
 {
     motion_t m;
     if (!a->device)
         msg_exit ("%s: no serial device configured", name);
     if (!(m = motion_init (a->device, name, debug ? MOTION_DEBUG : 0)))
         err_exit ("%s: init %s", name, a->device);
-    if (motion_set_resolution (m, a->resolution) < 0)
-        err_exit ("%s: set resolution", name);
     if (motion_set_current (m, a->ihold, a->irun) < 0)
         err_exit ("%s: set current", name);
+    if (motion_set_mode (m, a->mode) < 0)
+        err_exit ("%s: set mode", name);
+    if (motion_set_resolution (m, a->resolution) < 0)
+        err_exit ("%s: set resolution", name);
     if (motion_set_acceleration (m, a->accel, a->decel) < 0)
         err_exit ("%s: set acceleration", name);
-    if (motion_set_velocity (m, a->track) < 0)
-        err_exit ("%s: set velocity", name);
+    axis_track (m, a);
     return m;
 }
 
@@ -212,12 +225,14 @@ int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->device = xstrdup (value);
     } else if (!strcmp (name, "resolution"))
         a->resolution = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "track"))
-        a->track = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "mode"))
+        a->mode = !strcmp (value, "auto") ? 1 : 0;
     else if (!strcmp (name, "slow"))
         a->slow = strtoul (value, NULL, 10);
     else if (!strcmp (name, "fast"))
         a->fast = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "track"))
+        a->track = strtoul (value, NULL, 10);
     else if (!strcmp (name, "ihold"))
         a->ihold = strtoul (value, NULL, 10);
     else if (!strcmp (name, "irun"))
