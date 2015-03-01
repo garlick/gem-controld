@@ -5,7 +5,7 @@ LIBS = -lev -lm -lrt \
 	-L$(abs_topdir)/libini \
 	-lini -L$(abs_topdir)/libutil -lutil
 
-OBJS = gem.o motion.o gpio.o
+OBJS = hpad.o motion.o gem.o
 
 all: gem
 

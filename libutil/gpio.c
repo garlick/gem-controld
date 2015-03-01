@@ -28,14 +28,10 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <poll.h>
 #include <string.h>
-#include <time.h>
+#include <errno.h>
 
 #include "gpio.h"
-
-#include "libutil/xzmalloc.h"
-#include "libutil/log.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX    1024

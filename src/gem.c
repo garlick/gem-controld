@@ -36,9 +36,10 @@
 #include "libini/ini.h"
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
+#include "libutil/gpio.h"
 
 #include "motion.h"
-#include "gpio.h"
+#include "hpad.h"
 
 char *prog = "";
 
@@ -59,16 +60,22 @@ typedef struct {
     opt_axis_t ra;
     opt_axis_t dec;
     bool debug;
-    int gpio[4];
+    char *hpad_gpio;
+    int hpad_debounce;
 } opt_t;
+
+typedef struct {
+    opt_t opt;
+    hpad_t hpad;
+    motion_t ra, dec;    
+} ctx_t;
 
 char *config_filename = NULL;
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
-motion_t axis_init (opt_axis_t *a, const char *name, bool debug);
-void axis_slew (motion_t m, opt_axis_t *a, bool fast, bool reverse);
-void axis_track (motion_t m, opt_axis_t *a);
+void hpad_cb (hpad_t h, int val, void *arg);
+motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -90,11 +97,11 @@ static void usage (void)
 
 int main (int argc, char *argv[])
 {
-    //struct ev_loop *loop = EV_DEFAULT;
+    struct ev_loop *loop;
     int ch;
-    opt_t opt;
+    ctx_t ctx;
 
-    memset (&opt, 0, sizeof (opt));
+    memset (&ctx, 0, sizeof (ctx));
 
     prog = basename (argv[0]);
     log_init (prog);
@@ -113,7 +120,7 @@ int main (int argc, char *argv[])
             msg_exit ("Who are you?");
         config_filename = xasprintf ("%s/.gem/config.ini", pw->pw_dir);
     }
-    (void)ini_parse (config_filename, config_cb, &opt);
+    (void)ini_parse (config_filename, config_cb, &ctx.opt);
 
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -121,7 +128,7 @@ int main (int argc, char *argv[])
             case 'c':   /* --config FILE (handled above) */
                 break;
             case 'd':   /* --debug */
-                opt.debug = true;
+                ctx.opt.debug = true;
                 break;
             case 'h':   /* --help */
             default:
@@ -131,74 +138,31 @@ int main (int argc, char *argv[])
     if (optind < argc)
         usage ();
 
-    motion_t ra = axis_init (&opt.ra, "RA", opt.debug);
-    motion_t dec = axis_init (&opt.dec, "DEC", opt.debug);
+    if (!(loop = ev_loop_new (EVFLAG_AUTO)))
+        err_exit ("ev_loop_new");
 
-    /* Respond to button presses.
-     */
-    gpio_t g = gpio_init (opt.gpio, 4);
-    bool bye = false;
-    while (!bye) {
-        int keys = gpio_event (g);
-        bool fast = (keys & 0x8);
-        switch (keys & 0x7) {
-            case 0: /* nothing */
-                axis_track (ra, &opt.ra);
-                axis_track (dec, &opt.dec);
-                break;
-            case 1: /* N */
-                axis_slew (dec, &opt.dec, fast, false);
-                break;
-            case 2: /* S */
-                axis_slew (dec, &opt.dec, fast, true);
-                break;
-            case 3: /* W */
-                axis_slew (ra, &opt.ra, fast, false);
-                break;
-            case 4: /* E */
-                axis_slew (ra, &opt.ra, fast, true);
-                break;
-            case 5: { /* M1 */
-                double x, y;
-                if (motion_get_position (ra, &x) < 0
-                 || motion_get_position (dec, &y) < 0)
-                    err_exit ("failed to get x,y position");
-                msg ("(%.0f,%.0f)", x, y);
-                break;
-            }
-            case 6: /* M2 */
-                break;
-            case 7: /* M1+M2 */
-                //bye = true;
-                break;
-        }
-    }
-    gpio_fini (g);
+    ctx.ra = init_axis (&ctx.opt.ra, "RA", ctx.opt.debug);
+    ctx.dec = init_axis (&ctx.opt.dec, "DEC", ctx.opt.debug);
 
-    motion_fini (dec); 
-    motion_fini (ra); 
+    ctx.hpad = hpad_new ();
+    if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
+                   hpad_cb, &ctx) < 0)
+        err_exit ("hpad_init");
+    if (hpad_start (loop, ctx.hpad) < 0)
+        err_exit ("hpad_start");
+
+    ev_run (loop, 0); 
+    ev_loop_destroy (loop);
+
+    hpad_destroy (ctx.hpad);
+
+    motion_fini (ctx.dec); 
+    motion_fini (ctx.ra); 
 
     return 0;
 }
 
-void axis_slew (motion_t m, opt_axis_t *a, bool fast, bool reverse)
-{
-    const char *name = motion_name (m);
-    int velocity = (fast ? a->fast : a->slow) * (reverse ? -1 : 1);
-
-    if (motion_set_velocity (m, velocity) < 0)
-        err_exit ("%s: set velocity", name);
-}
-
-void axis_track (motion_t m, opt_axis_t *a)
-{
-    const char *name = motion_name (m);
-
-    if (motion_set_velocity (m, a->track) < 0)
-        err_exit ("%s: set velocity", name);
-}
-
-motion_t axis_init (opt_axis_t *a, const char *name, bool debug)
+motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
 {
     motion_t m;
     if (!a->device)
@@ -213,7 +177,8 @@ motion_t axis_init (opt_axis_t *a, const char *name, bool debug)
         err_exit ("%s: set resolution", name);
     if (motion_set_acceleration (m, a->accel, a->decel) < 0)
         err_exit ("%s: set acceleration", name);
-    axis_track (m, a);
+    if (motion_set_velocity (m, a->track) < 0)
+        err_exit ("%s: set velocity", name);
     return m;
 }
 
@@ -261,17 +226,58 @@ int config_cb (void *user, const char *section, const char *name,
         rc = config_axis (&opt->ra, name, value);
     else if (!strcmp (section, "dec"))
         rc = config_axis (&opt->dec, name, value);
-    else if (!strcmp (section, "gpio")) {
-        if (!strcmp (name, "bit0"))
-            opt->gpio[0] = strtoul (value, NULL, 10);
-        else if (!strcmp (name, "bit1"))
-            opt->gpio[1] = strtoul (value, NULL, 10);
-        else if (!strcmp (name, "bit2"))
-            opt->gpio[2] = strtoul (value, NULL, 10);
-        else if (!strcmp (name, "bit3"))
-            opt->gpio[3] = strtoul (value, NULL, 10);
+    else if (!strcmp (section, "hpad")) {
+        if (!strcmp (name, "gpio")) {
+            if (opt->hpad_gpio)
+                free (opt->hpad_gpio);
+            opt->hpad_gpio = strdup (value);
+        } else if (!strcmp (name, "debounce"))
+            opt->hpad_debounce = strtoul (value, NULL, 10);
     }
     return rc;
+}
+
+void hpad_cb (hpad_t h, int val, void *arg)
+{
+    ctx_t *ctx = arg;
+    bool fast = (val & HPAD_MASK_FAST);
+
+    switch (val & HPAD_MASK_KEYS) {
+        case HPAD_KEY_NONE: {
+            if (motion_set_velocity (ctx->ra, ctx->opt.ra.track) < 0)
+                err_exit ("ra: set velocity");
+            if (motion_set_velocity (ctx->dec, ctx->opt.dec.track) < 0)
+                err_exit ("dec: set velocity");
+            break;
+        }
+        case HPAD_KEY_NORTH: {
+            int v = (fast ? ctx->opt.dec.fast : ctx->opt.dec.slow);
+            if (motion_set_velocity (ctx->dec, v) < 0)
+                err_exit ("dec: set velocity");
+            break;
+        }
+        case HPAD_KEY_SOUTH: {
+            int v = -1 * (fast ? ctx->opt.dec.fast : ctx->opt.dec.slow);
+            if (motion_set_velocity (ctx->dec, v) < 0)
+                err_exit ("dec: set velocity");
+            break;
+        }
+        case HPAD_KEY_WEST: {
+            int v = (fast ? ctx->opt.ra.fast : ctx->opt.ra.slow);
+            if (motion_set_velocity (ctx->ra, v) < 0)
+                err_exit ("ra: set velocity");
+            break;
+        }
+        case HPAD_KEY_EAST: {
+            int v = -1 * (fast ? ctx->opt.ra.fast : ctx->opt.ra.slow);
+            if (motion_set_velocity (ctx->ra, v) < 0)
+                err_exit ("ra: set velocity");
+            break;
+        } 
+        case HPAD_KEY_M1:
+        case HPAD_KEY_M2:
+            break;
+    }
 }
 
 
