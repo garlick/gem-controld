@@ -28,11 +28,11 @@ int gpio_open (int pin, int mode);
 
 /* Read GPIO pin by file descriptor.
  */
-int gpio_read (int fd, bool *val);
+int gpio_read (int fd, int *val);
 
 /* Write GPIO pin by file descriptor.
  */
-int gpio_write (int fd, bool val);
+int gpio_write (int fd, int val);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

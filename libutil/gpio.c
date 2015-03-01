@@ -138,7 +138,7 @@ done:
     return rc;
 }
 
-int gpio_read (int fd, bool *val)
+int gpio_read (int fd, int *val)
 {
     char c;
     int n;
@@ -153,13 +153,13 @@ int gpio_read (int fd, bool *val)
         errno = EIO;
         goto done;
     } 
-    *val = (c == '0' ? false : true);
+    *val = (c == '0' ? 0 : 1);
     rc = 0;
 done:
     return rc;
 }
 
-int gpio_write (int fd, bool val)
+int gpio_write (int fd, int val)
 {
     char c;
     int rc = -1;

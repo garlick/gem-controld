@@ -60,8 +60,9 @@ typedef struct {
     opt_axis_t ra;
     opt_axis_t dec;
     bool debug;
+    bool no_motion;
     char *hpad_gpio;
-    int hpad_debounce;
+    double hpad_debounce;
 } opt_t;
 
 typedef struct {
@@ -74,14 +75,15 @@ char *config_filename = NULL;
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
-void hpad_cb (hpad_t h, int val, void *arg);
+void hpad_cb (hpad_t h, void *arg);
 motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
 
-#define OPTIONS "+c:hd"
+#define OPTIONS "+c:hdn"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug",                no_argument,       0, 'd'},
+    {"no-motion",            no_argument,       0, 'n'},
     {0, 0, 0, 0},
 };
 
@@ -91,6 +93,7 @@ static void usage (void)
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE         set path to config file\n"
 "    -d,--debug               emit verbose debugging to stderr\n"
+"    -n,--no-motion           do not attempt to talk to motion controllers\n"
 );
     exit (1);
 }
@@ -130,6 +133,9 @@ int main (int argc, char *argv[])
             case 'd':   /* --debug */
                 ctx.opt.debug = true;
                 break;
+            case 'n':   /* --no-motion */
+                ctx.opt.no_motion = true;
+                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -141,23 +147,27 @@ int main (int argc, char *argv[])
     if (!(loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    ctx.ra = init_axis (&ctx.opt.ra, "RA", ctx.opt.debug);
-    ctx.dec = init_axis (&ctx.opt.dec, "DEC", ctx.opt.debug);
+    if (!ctx.opt.no_motion) {
+        ctx.ra = init_axis (&ctx.opt.ra, "RA", ctx.opt.debug);
+        ctx.dec = init_axis (&ctx.opt.dec, "DEC", ctx.opt.debug);
+    }
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
                    hpad_cb, &ctx) < 0)
         err_exit ("hpad_init");
-    if (hpad_start (loop, ctx.hpad) < 0)
-        err_exit ("hpad_start");
+    hpad_start (loop, ctx.hpad);
 
     ev_run (loop, 0); 
     ev_loop_destroy (loop);
 
+    hpad_stop (loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
 
-    motion_fini (ctx.dec); 
-    motion_fini (ctx.ra); 
+    if (ctx.dec)
+        motion_fini (ctx.dec); 
+    if (ctx.ra)
+        motion_fini (ctx.ra); 
 
     return 0;
 }
@@ -232,16 +242,24 @@ int config_cb (void *user, const char *section, const char *name,
                 free (opt->hpad_gpio);
             opt->hpad_gpio = strdup (value);
         } else if (!strcmp (name, "debounce"))
-            opt->hpad_debounce = strtoul (value, NULL, 10);
+            opt->hpad_debounce = strtod (value, NULL);
     }
     return rc;
 }
 
-void hpad_cb (hpad_t h, int val, void *arg)
+void hpad_cb (hpad_t h, void *arg)
 {
     ctx_t *ctx = arg;
-    bool fast = (val & HPAD_MASK_FAST);
+    int val;
 
+    if ((val = hpad_read (h)) < 0)
+        err_exit ("hpad");
+    if (ctx->opt.debug)
+        msg ("hpad: %d", val);
+    if (ctx->opt.no_motion)
+        return;
+
+    bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
             if (motion_set_velocity (ctx->ra, ctx->opt.ra.track) < 0)

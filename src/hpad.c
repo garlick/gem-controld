@@ -22,14 +22,10 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* libev doesn't grok POLL_PRI so we use epoll to create a
- * single file descriptor that becomes readable when any fd's
- * it is watching have the POLL_PRI event.
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <sys/epoll.h>
 #include <unistd.h>
 #include <libgen.h>
@@ -56,8 +52,10 @@ struct hpad_struct {
     int efd;
     hpad_cb_t cb;
     void *cb_arg;
-    int debounce_msec;
-    ev_io w;
+    double debounce;
+    int val;
+    ev_io io_w;
+    ev_timer timer_w;
 };
 
 hpad_t hpad_new (void)
@@ -87,12 +85,41 @@ void hpad_destroy (hpad_t h)
     }
 }
 
-static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
+int hpad_read (hpad_t h)
 {
-    msg ("%s", __FUNCTION__);
+    int code = 0;
+    int i;
+
+    for (i = 0; i < 4; i++) {
+        pin_t *p = &h->pins[i];
+        int val;
+        if (gpio_read (p->fd, &val) < 0)
+            return -1;
+        code |= (val<<i);
+    }
+    return code;
 }
 
-int hpad_init (hpad_t h, const char *pins, int debounce_msec,
+static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
+{
+    hpad_t h = (hpad_t)((char *)w - offsetof (struct hpad_struct, timer_w));
+    int val = hpad_read (h);
+    if (val != h->val) {
+        h->val = val;
+        h->cb (h, h->cb_arg);
+    }
+}
+
+static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
+{
+    hpad_t h = (hpad_t)((char *)w - offsetof (struct hpad_struct, io_w));
+    if (!ev_is_active (&h->timer_w)) {
+        ev_timer_set (&h->timer_w, h->debounce, 0.);
+        ev_timer_start (loop, &h->timer_w);
+    }
+}
+
+int hpad_init (hpad_t h, const char *pins, double debounce,
                hpad_cb_t cb, void *arg)
 {
     int i, rc = -1;
@@ -102,8 +129,8 @@ int hpad_init (hpad_t h, const char *pins, int debounce_msec,
         errno = EINVAL;
         goto done;
     }
-    if ((h->efd = epoll_create (4)) < 0)
-        goto done;
+    if ((h->efd = epoll_create (4)) < 0)    /* need this because libev */
+        goto done;                          /*   doesn't grok POLLPRI */
     cpy = xstrdup (pins);
     tok = strtok (cpy, ",");
     for (i = 0; i < 4; i++) {
@@ -122,15 +149,17 @@ int hpad_init (hpad_t h, const char *pins, int debounce_msec,
         if ((p->fd = gpio_open (p->pin, O_RDONLY)) < 0)
             goto done;
         p->e.data.fd = p->fd;
-        p->e.events = POLL_PRI;
+        p->e.events = EPOLLPRI;
         if (epoll_ctl (h->efd, EPOLL_CTL_ADD, p->fd, &p->e) < 0)
             goto done;
         tok = strtok (NULL, ",");
     }
-    h->debounce_msec = debounce_msec;
+    h->debounce = debounce;
     h->cb = cb;
     h->cb_arg = arg;
-    ev_io_init (&h->w, gpio_cb, h->efd, EV_READ);
+    ev_io_init (&h->io_w, gpio_cb, h->efd, EV_READ);
+    ev_timer_init (&h->timer_w, timer_cb, h->debounce, 0.);
+    h->val = hpad_read (h);
     rc = 0;
 done:
     if (cpy)
@@ -140,12 +169,13 @@ done:
 
 void hpad_start (struct ev_loop *loop, hpad_t h)
 {
-    ev_io_start (loop, &h->w);
+    ev_io_start (loop, &h->io_w);
 }
 
 void hpad_stop (struct ev_loop *loop, hpad_t h)
 {
-    ev_io_stop (loop, &h->w);
+    ev_io_stop (loop, &h->io_w);
+    ev_timer_stop (loop, &h->timer_w);
 }
 
 /*
