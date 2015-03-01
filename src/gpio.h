@@ -1,10 +1,39 @@
-typedef struct gpio_struct *gpio_t;
+#include <stdbool.h>
 
-/* 'gpio' is an array of 'len' integers representing the GPIO
- * pin assignments.  gpio[0] = bit0 gpio pin assignment,
- * gpio[1] = bit1 gpio pin assignment, etc., and pin numbers
- * correspond to the /sys/class/gpio/gpioN numbering.
+/* All functions return 0 on succes, or
+ * -1 on error with errno set, 
  */
-gpio_t gpio_init (int *gpio, int len);
-void gpio_fini (gpio_t g);
-int gpio_event (gpio_t g);
+
+/* Export/unexport  a GPIO pin.
+ */
+int gpio_set_export (int pin, bool val);
+
+/* Set port direction.  'direction' should be "in", "out", "low", or "high".
+ * The latter two set direction to output and write an initial value.
+ */
+int gpio_set_direction (int pin, const char *direction);
+
+/* Configure interrupt 'edge' to "none", "rising", "falling", or "both".
+ */
+int gpio_set_edge (int pin, const char *edge);
+
+/* Configure port polarity (affects edge, read, write).
+ */
+int gpio_set_polarity (int pin, bool active_high);
+
+/* Open GPIO pin, returning file descriptor.
+ * The file descriptor should be closed with close () when no longer needed.
+ */
+int gpio_open (int pin, int mode);
+
+/* Read GPIO pin by file descriptor.
+ */
+int gpio_read (int fd, bool *val);
+
+/* Write GPIO pin by file descriptor.
+ */
+int gpio_write (int fd, bool val);
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
