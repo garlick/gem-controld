@@ -1,0 +1,98 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible = "ti,beaglebone", "ti,beaglebone-black";
+
+    part-number = "GEM-IO";
+    version = "00A0";
+
+    exclusive-use =
+        "P8.7", "gpio2_2",	                      // handbox GPIO pins
+        "P8.8", "gpio2_3",
+        "P8.9", "gpio2_5",
+        "P8.10", "gpio2_4",
+
+        "P8.39", "gpio2_12",                          // guide out
+        "P8.40", "gpio2_13",
+        "P8.41", "gpio2_10",
+        "P8.42", "gpio2_11",
+
+        "P8.43", "gpio2_8",                           // guide in
+        "P8.44", "gpio2_9",
+        "P8.45", "gpio2_6",
+        "P8.46", "gpio2_7",
+
+        "P9.24", "P9.26", "uart1",                    // motion control RS-422
+        "P9.21", "P9.22", "uart2",
+
+        "P9.25", "P9.27", "P9.41", "P9.42", "eqep0";  // RA encoder
+
+    fragment@0 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            gem_hbox_pins: pinmux_gem_hbox_pins {
+                pinctrl-single,pins = <
+                    0x090 0x0              // P8.7
+                    0x094 0x0              // P8.8
+                    0x09c 0x0              // P8.9
+                    0x098 0x0              // P8.10
+                >;
+            };
+            gem_guide_out_pins: pinmux_gem_guide_out_pins {
+                pinctrl-single,pins = <
+                    0x0b8 0x0              // P8.39
+                    0x0bc 0x0              // P8.40
+                    0x0b0 0x0              // P8.41
+                    0x0b4 0x0              // P8.42
+                >;
+            };
+            gem_guide_in_pins: pinmux_gem_guide_in_pins {
+                pinctrl-single,pins = <
+                    0x0a8 0x0              // P8.43
+                    0x0ac 0x0              // P8.44
+                    0x0a0 0x0              // P8.45
+                    0x0a4 0x0              // P8.46
+                >;
+            };
+            gem_uart1_pins: pinmux_gem_uart1_pins {
+                pinctrl-single,pins = <
+                    0x184 0x20             // P9.24 mode0 output (tx) 
+                    0x180 0x20             // P9.26 mode0 output (rx) 
+                >;
+            };
+            gem_uart2_pins: pinmux_gem_uart2_pins {
+                pinctrl-single,pins = <
+                    0x154 0x20             // P9.21 mode0 output (tx) 
+                    0x150 0x20             // P9.22 mode0 output (rx) 
+                >;
+            };
+            gem_ra_encoder_pins: pinmux_gem_ra_encoder_pins {
+                pinctrl-single,pins = <
+                    0x1ac 0x0              // P9.25 eqep0 strobe
+                    0x1a4 0x0              // P9.27 eqep0 B
+                    0x1b4 0x0              // P9.41 eqep0 index
+                    0x164 0x0              // P9.42 eqep0 A
+                >;
+            };
+        };
+    };
+
+    fragment@1 {
+        target = <&ocp>;
+        __overlay__ {
+            gemhbox0_helper {
+                compatible = "bone-pinmux-helper";
+                pinctrl-names = "default";
+                pinctrl-0 = <&gemhbox0>;
+                status = "okay";
+            };
+            gemhbox1_helper {
+                compatible = "bone-pinmux-helper";
+                pinctrl-names = "default";
+                pinctrl-0 = <&gemhbox1>;
+                status = "okay";
+            };
+        };
+    };
+};
