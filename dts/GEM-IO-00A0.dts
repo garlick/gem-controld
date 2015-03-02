@@ -84,13 +84,14 @@
             gemhbox0_helper {
                 compatible = "bone-pinmux-helper";
                 pinctrl-names = "default";
-                pinctrl-0 = <&gemhbox0>;
-                status = "okay";
-            };
-            gemhbox1_helper {
-                compatible = "bone-pinmux-helper";
-                pinctrl-names = "default";
-                pinctrl-0 = <&gemhbox1>;
+                pinctrl-0 = <
+                    &gem_hbox_pins
+                    &gem_guide_out_pins
+                    &gem_guide_in_pins
+                    &gem_uart1_pins
+                    &gem_uart2_pins
+                    &gem_ra_encoder_pins
+                >;
                 status = "okay";
             };
         };
