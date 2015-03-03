@@ -3,10 +3,8 @@
 `GEM-IO` is the device tree overlay for the "cape" used in this project.
 
 The cape includes:
-* UART1 and UART2 wired to SN65HV0379 3V3 RS422 conversion chips,
-in turn are wired to hearders that connect to IM483I motion controllers.
-* Four GPIO lines wired to a Bartels handpad with external resistors as
-follows:
+* UART1 and UART2 wired to [Texas Instrument SN65HVD379](www.ti.com/product/sn65hvd379) 3V3 RS422 conversion chips, in turn wired to headers that connect to [Schneider Electric IM483I](motion.schneider-electric.com/products/im483i_ie.html) motion controllers.
+* Four GPIO lines wired to a [Bartels Handpad](www.bbastrodesigns.com/handpad-assembly_notes.html) with external resistors as follows:
 ```
 ^ 3V3
 |
@@ -19,8 +17,7 @@ follows:
           |
          GND
 ```
-* Four GPIO pins looped back int four other GPIO pins, to allow
-`lin-guider` to use its GPIO actuator to send us autoguider pulses.
+* Four GPIO pins looped back int four other GPIO pins, to allow [lin-guider](sourceforge.net/projects/linguider) to use its GPIO actuator to send us autoguider pulses.
 * EQEP0 wired to an indexed encoder on the RA axis for PEC.
 
 ### Installing the overlay
