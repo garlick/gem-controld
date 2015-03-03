@@ -3,7 +3,7 @@
 `GEM-IO` is the device tree overlay for the "cape" used in this project.
 
 The cape includes:
-* UART1 and UART2 wired to [Texas Instrument SN65HVD379](http://www.ti.com/product/sn65hvd379) 3V3 RS422 conversion chips, in turn wired to headers that connect to [Schneider Electric IM483I](http://motion.schneider-electric.com/products/im483i_ie.html) motion controllers.
+* UART1 and UART2 wired to [Texas Instrument SN65HVD379](http://www.ti.com/product/sn65hvd379) 3V3 RS422 conversion chips, in turn wired to headers that connect to [Schneider Electric IM483I](http://motion.schneider-electric.com/products/im483i_ie.html) motion controllers, which drive Oriental Motor PK245M-02BA steppers on the RA and DEC axes.
 * Four GPIO lines wired to a [Bartels Handpad](http://www.bbastrodesigns.com/handpad-assembly_notes.html) with external resistors as follows:
 ```
 ^ 3V3
@@ -17,8 +17,10 @@ The cape includes:
           |
          GND
 ```
-* Four GPIO pins looped back int four other GPIO pins, to allow [lin-guider](http://sourceforge.net/projects/linguider) to use its GPIO actuator to send us autoguider pulses.
-* EQEP0 wired to an indexed encoder on the RA axis for PEC.
+* Four GPIO outputs looped back into four GPIO inputs, to allow [lin_guider](http://sourceforge.net/projects/linguider) to use its GPIO actuator to send us autoguide pulses.
+* EQEP0 wired to an US Digital S5S-32-IB indexed encoder on the RA axis for PEC.
+
+There you have the whole hardware design in a nutshell!
 
 ### Installing the overlay
 
