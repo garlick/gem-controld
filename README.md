@@ -12,6 +12,7 @@ telescope pier.
 
 #### Completed
 
+* select motion controller config for stepper motors
 * RS-422 interface to motion controllers using two Beaglebone serial ports
 * Handpad interface using four GPIO pins
 * ini-style config file
@@ -23,7 +24,9 @@ telescope pier.
 #### Still working on
 
 * encoder interface for PEC
-* ST-4 style guiding input
 * RA velocity tuning
+* transform X, Y coordinates (steps) to RA, DEC
+* develop alignment sequence to initialize RA, DEC offsets
+* ST-4 style guiding input
 * zeromq interface for remote autoguiding and status
 * LX200 protocol emulation for Sky Safari control

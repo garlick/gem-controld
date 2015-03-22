@@ -1,6 +1,7 @@
 ### Beaglebone Black Device Tree Overlay
 
 `GEM-IO` is the device tree overlay for the "cape" used in this project.
+This description assumes debian wheezy with 3.8.13 or newer kernel.
 
 The cape includes:
 * UART1 and UART2 wired to [Texas Instrument SN65HVD379](http://www.ti.com/product/sn65hvd379) 3V3 RS422 conversion chips, in turn wired to headers that connect to [Schneider Electric IM483I](http://motion.schneider-electric.com/products/im483i_ie.html) motion controllers, which drive Oriental Motor PK245M-02BA steppers on the RA and DEC axes.
