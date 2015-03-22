@@ -1,6 +1,6 @@
 include ../Makefile.inc
 
-OBJS = log.o xzmalloc.o gpio.o
+OBJS = log.o xzmalloc.o gpio.o ev_zmq.o
 
 all: libutil.a
 
