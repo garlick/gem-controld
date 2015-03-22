@@ -1,0 +1,9 @@
+[Unit]
+Description=GEM Telescope Control Daemon
+
+[Service]
+ExecStart=/usr/local/sbin/gem-controld
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
