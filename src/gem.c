@@ -71,7 +71,7 @@ typedef struct {
     motion_t ra, dec;    
 } ctx_t;
 
-char *config_filename = NULL;
+char *config_filename = "/usr/local/etc/gem.config";
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
@@ -116,14 +116,15 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-
-    if (!config_filename) {
-        struct passwd *pw = getpwuid (getuid ());
-        if (!pw)
-            msg_exit ("Who are you?");
-        config_filename = xasprintf ("%s/.gem/config.ini", pw->pw_dir);
+    if (config_filename) {
+        int rc = ini_parse (config_filename, config_cb, &ctx.opt);
+        if (rc == -1) /* file open error */
+            err_exit ("%s", config_filename);
+        else if (rc == -2) /* out of memory */
+            errn_exit (ENOMEM, "%s", config_filename);
+        else if (rc > 0) /* line number */
+            msg_exit ("%s: parse error on line %d", config_filename, rc);
     }
-    (void)ini_parse (config_filename, config_cb, &ctx.opt);
 
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -194,6 +195,7 @@ motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
 
 int config_axis (opt_axis_t *a, const char *name, const char *value)
 {
+    int rc = 1; /* 0 = error */
     if (!strcmp (name, "device")) {
         if (a->device)
             free (a->device);
@@ -216,14 +218,14 @@ int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->accel = strtoul (value, NULL, 10);
     else if (!strcmp (name, "decel"))
         a->decel = strtoul (value, NULL, 10);
-    return 0;
+    return rc;
 }
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value)
 {
     opt_t *opt = user;
-    int rc = 0;
+    int rc = 1; /* 0 = error */
 
     if (!strcmp (section, "general")) {
         if (!strcmp (name, "debug")) {
