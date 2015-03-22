@@ -1,3 +1,5 @@
+include ../Makefile.inc
+
 BIN = GEM-IO-00A0.dtbo
 FWDIR = /lib/firmware
 

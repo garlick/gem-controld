@@ -71,7 +71,7 @@ typedef struct {
     motion_t ra, dec;    
 } ctx_t;
 
-char *config_filename = "/usr/local/etc/gem.config";
+char *config_filename = CONFIG_FILENAME;
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
