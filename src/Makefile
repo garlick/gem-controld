@@ -3,14 +3,15 @@ include ../Makefile.inc
 CFLAGS = -Wall -D_GNU_SOURCE=1 -I$(abs_topdir)
 LIBS = -lev -lm -lrt \
 	-L$(abs_topdir)/libini \
-	-lini -L$(abs_topdir)/libutil -lutil
+	-lini -L$(abs_topdir)/libutil -lutil -lczmq -lzmq
 
-OBJS = hpad.o motion.o gem.o
+all: gem-controld
 
-all: gem
-
-gem: $(OBJS)
+gem-controld: hpad.o motion.o gem.o
 	$(CC) -o $@ $^ $(LIBS)
 
+install: gem-controld
+	cp gem-controld /usr/local/sbin/gem-controld
+
 clean:
-	rm -f $(OBJS) gem
+	rm -f *.o gem-controld

@@ -7,5 +7,7 @@ all: libutil.a
 libutil.a: $(OBJS)
 	$(AR) rv $@ $^
 
+install:
+
 clean:
 	rm -f *.a *.o
