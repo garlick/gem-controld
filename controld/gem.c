@@ -32,11 +32,14 @@
 #include <string.h>
 #include <pwd.h>
 #include <ev.h>
+#include <zmq.h>
+#include <czmq.h>
 
 #include "libini/ini.h"
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
 #include "libutil/gpio.h"
+#include "libutil/ev_zmq.h"
 
 #include "motion.h"
 #include "hpad.h"
@@ -63,12 +66,15 @@ typedef struct {
     bool no_motion;
     char *hpad_gpio;
     double hpad_debounce;
+    char *req_uri;
 } opt_t;
 
 typedef struct {
     opt_t opt;
     hpad_t hpad;
-    motion_t ra, dec;    
+    motion_t ra, dec;
+    zsock_t *zreq;
+    ev_zmq req_watcher;
 } ctx_t;
 
 char *config_filename = CONFIG_FILENAME;
@@ -77,6 +83,10 @@ int config_cb (void *user, const char *section, const char *name,
                const char *value);
 void hpad_cb (hpad_t h, void *arg);
 motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
+
+
+void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
+
 
 #define OPTIONS "+c:hdn"
 static const struct option longopts[] = {
@@ -144,6 +154,10 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
+    if (!ctx.opt.hpad_gpio)
+        msg_exit ("no hpad_gpio was configured");
+    if (!ctx.opt.req_uri)
+        msg_exit ("no req uri was configured");
 
     if (!(loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
@@ -159,6 +173,14 @@ int main (int argc, char *argv[])
         err_exit ("hpad_init");
     hpad_start (loop, ctx.hpad);
 
+    if (!(ctx.zreq = zsock_new_router (ctx.opt.req_uri)))
+        err_exit ("zsock_new_router %s", ctx.opt.req_uri);
+    if (ev_zmq_init (&ctx.req_watcher, zreq_cb,
+                     zsock_resolve (ctx.zreq), EV_READ) < 0)
+        err_exit ("ev_zmq_init");
+    ev_zmq_start (loop, &ctx.req_watcher);
+    zsys_handler_set (NULL); /* disable zeromq signal handling */
+
     ev_run (loop, 0); 
     ev_loop_destroy (loop);
 
@@ -170,7 +192,24 @@ int main (int argc, char *argv[])
     if (ctx.ra)
         motion_fini (ctx.ra); 
 
+    zsock_destroy (&ctx.zreq);
+
     return 0;
+}
+
+void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
+{
+    ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, req_watcher));
+    unsigned int op;
+    unsigned int x, y;
+
+    if (zsock_recv (ctx->zreq, "uuu", &op, &x, &y) < 0) {
+        err ("zreq");
+        goto done;
+    }
+    msg ("zreq: %u %u %u", op, x, y);
+done:
+    return;
 }
 
 motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
@@ -242,9 +281,15 @@ int config_cb (void *user, const char *section, const char *name,
         if (!strcmp (name, "gpio")) {
             if (opt->hpad_gpio)
                 free (opt->hpad_gpio);
-            opt->hpad_gpio = strdup (value);
+            opt->hpad_gpio = xstrdup (value);
         } else if (!strcmp (name, "debounce"))
             opt->hpad_debounce = strtod (value, NULL);
+    } else if (!strcmp (section, "sockets")) {
+        if (!strcmp (name, "req")) {
+            if (opt->req_uri)
+                free (opt->req_uri);
+            opt->req_uri = xstrdup (value);
+        } 
     }
     return rc;
 }
