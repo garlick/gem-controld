@@ -8,13 +8,11 @@ LIBS = -lev -lm -lrt \
 
 all: gem-controld
 
-gem-controld: hpad.o motion.o gem.o
+gem-controld: hpad.o motion.o daemon.o
 	$(CC) -o $@ $^ $(LIBS)
 
 install: gem-controld
-	systemctl stop gem.service
 	cp gem-controld $(prefix)/sbin/gem-controld
-	systemctl start gem.service
 
 install_cli:
 
