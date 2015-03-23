@@ -67,12 +67,14 @@ void op_position (ctx_t *ctx, int ac, char **av);
 void op_stop (ctx_t *ctx, int ac, char **av);
 void op_track (ctx_t *ctx, int ac, char **av);
 void op_zero (ctx_t *ctx, int ac, char **av);
+void op_goto (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
     { "stop",     op_stop},
     { "track",    op_track},
     { "zero",     op_zero},
+    { "goto",     op_goto},
 };
 
 #define OPTIONS "+c:h"
@@ -236,6 +238,23 @@ void op_zero (ctx_t *ctx, int ac, char **av)
     }
     msg ("zero %d, %d", x, y);
 }
+
+void op_goto (ctx_t *ctx, int ac, char **av)
+{
+    int x, y;
+    if (ac != 2) {
+        msg ("goto takes two arguments");
+        return;
+    }
+    x = strtoul (av[0], NULL, 10);
+    y = strtoul (av[1], NULL, 10);
+    if (do_request (ctx, 5, &x, &y) < 0){
+        err ("goto");
+        return;
+    }
+    msg ("goto %d, %d", x, y);
+}
+
 
 int config_cb (void *user, const char *section, const char *name,
                const char *value)

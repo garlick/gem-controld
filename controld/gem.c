@@ -279,6 +279,15 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             rc = 0;
             break;
         }
+        case 5: { /* goto */
+            if (motion_set_position (ctx->ra, (double)x) < 0)
+                goto done;
+            if (motion_set_position (ctx->dec, (double)y) < 0)
+                goto done;
+            ctx->stopped = true;
+            rc = 0;
+            break;
+        }
     }
 done:
     errnum = errno;

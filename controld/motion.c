@@ -46,7 +46,6 @@ struct motion_struct {
     int flags;
 };
 
-const int read_timeout_sec = 5;
 const int max_cmdline = 80;
 
 /* Translate funny characters into readable debug output.
@@ -197,7 +196,7 @@ done:
     return rc;
 }
 
-/* Open/configure the serial port for "pretty raw with timeout".
+/* Open/configure the serial port
  */
 static int mopen (motion_t m)
 {
@@ -210,8 +209,8 @@ static int mopen (motion_t m)
     tio.c_iflag = IGNPAR;
     tio.c_oflag = 0;
     tio.c_lflag = 0;
-    tio.c_cc[VTIME] = 10 * read_timeout_sec;
-    tio.c_cc[VMIN] = 0;
+    tio.c_cc[VTIME] = 0; /* no timeout */
+    tio.c_cc[VMIN] = 1;  /* block until 1 char available */
     tcflush (m->fd, TCIFLUSH);
     return tcsetattr(m->fd, TCSANOW, &tio);
 }
