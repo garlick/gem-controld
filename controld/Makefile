@@ -14,5 +14,7 @@ gem-controld: hpad.o motion.o gem.o
 install: gem-controld
 	cp gem-controld $(prefix)/sbin/gem-controld
 
+install_cli:
+
 clean:
 	rm -f *.o gem-controld

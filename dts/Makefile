@@ -22,6 +22,8 @@ clean:
 install: $(BIN)
 	cp $(BIN) $(FWDIR)
 
+install_cli:
+
 slots:
 	cat $(SLOTS)
 pins:

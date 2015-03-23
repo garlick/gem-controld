@@ -7,7 +7,7 @@ all: libini.a
 libini.a: $(OBJS)
 	$(AR) rv $@ $^
 
-install:
+install_cli install:
 
 clean:
 	rm -f *.a *.o

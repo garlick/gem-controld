@@ -11,7 +11,9 @@ all: gem
 gem: gem.o
 	$(CC) -o $@ $^ $(LIBS)
 
-install: gem
+install: install_cli
+
+install_cli: gem
 	cp gem $(prefix)/bin/gem
 
 clean:
