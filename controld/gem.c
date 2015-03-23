@@ -173,6 +173,7 @@ int main (int argc, char *argv[])
         err_exit ("hpad_init");
     hpad_start (loop, ctx.hpad);
 
+    setenv ("ZSYS_LINGER", "10", 1);
     if (!(ctx.zreq = zsock_new_router (ctx.opt.req_uri)))
         err_exit ("zsock_new_router %s", ctx.opt.req_uri);
     if (ev_zmq_init (&ctx.req_watcher, zreq_cb,
@@ -200,15 +201,40 @@ int main (int argc, char *argv[])
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
     ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, req_watcher));
-    unsigned int op;
-    unsigned int x, y;
+    zframe_t *sender;
+    int op, x, y;
+    int rc = -1;
 
-    if (zsock_recv (ctx->zreq, "uuu", &op, &x, &y) < 0) {
-        err ("zreq");
+    if (!(sender = zframe_recv (ctx->zreq))) {
+        err ("zframe_recv");
         goto done;
     }
-    msg ("zreq: %u %u %u", op, x, y);
+    if (zsock_recv (ctx->zreq, "iii", &op, &x, &y) < 0) {
+        err ("zsock_recv");
+        goto done;
+    }
+    switch (op) {
+        case 0: { /* position */
+            double ra, dec;
+            if (motion_get_position (ctx->ra, &ra) < 0)
+                goto done;
+            if (motion_get_position (ctx->dec, &dec) < 0)
+                goto done;
+            x = (int)ra;
+            y = (int)dec;
+            rc = 0;
+            break;
+        }
+    }
+    if (zframe_send (&sender, ctx->zreq, ZFRAME_MORE) < 0) {
+        err ("zframe_send");
+        goto done;
+    }
 done:
+    if (zsock_send (ctx->zreq, "iii", rc, x, y) < 0) {
+        err ("zsock_send");
+	goto done;
+    }
     return;
 }
 
