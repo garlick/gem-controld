@@ -64,6 +64,7 @@ typedef struct {
     opt_axis_t dec;
     bool debug;
     bool no_motion;
+    bool soft_init;
     char *hpad_gpio;
     double hpad_debounce;
     char *req_uri;
@@ -82,18 +83,19 @@ char *config_filename = CONFIG_FILENAME;
 int config_cb (void *user, const char *section, const char *name,
                const char *value);
 void hpad_cb (hpad_t h, void *arg);
-motion_t init_axis (opt_axis_t *a, const char *name, bool debug);
+motion_t init_axis (opt_axis_t *a, const char *name, int flags);
 
 
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
 
-#define OPTIONS "+c:hdn"
+#define OPTIONS "+c:hdns"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug",                no_argument,       0, 'd'},
     {"no-motion",            no_argument,       0, 'n'},
+    {"soft-init",            no_argument,       0, 's'},
     {0, 0, 0, 0},
 };
 
@@ -104,6 +106,7 @@ static void usage (void)
 "    -c,--config FILE         set path to config file\n"
 "    -d,--debug               emit verbose debugging to stderr\n"
 "    -n,--no-motion           do not attempt to talk to motion controllers\n"
+"    -s,--soft-init           do not initialize/zero motion controllers\n"
 );
     exit (1);
 }
@@ -147,6 +150,9 @@ int main (int argc, char *argv[])
             case 'n':   /* --no-motion */
                 ctx.opt.no_motion = true;
                 break;
+            case 's':   /* --soft-init */
+                ctx.opt.soft_init = true;
+                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -163,8 +169,13 @@ int main (int argc, char *argv[])
         err_exit ("ev_loop_new");
 
     if (!ctx.opt.no_motion) {
-        ctx.ra = init_axis (&ctx.opt.ra, "RA", ctx.opt.debug);
-        ctx.dec = init_axis (&ctx.opt.dec, "DEC", ctx.opt.debug);
+        int flags = 0;
+        if (ctx.opt.debug)
+            flags |= MOTION_DEBUG;
+        if (ctx.opt.soft_init)
+            flags |= MOTION_SOFTINIT;
+        ctx.ra = init_axis (&ctx.opt.ra, "RA", flags);
+        ctx.dec = init_axis (&ctx.opt.dec, "DEC", flags);
     }
 
     ctx.hpad = hpad_new ();
@@ -280,12 +291,12 @@ done_noreply:
     return;
 }
 
-motion_t init_axis (opt_axis_t *a, const char *name, bool debug)
+motion_t init_axis (opt_axis_t *a, const char *name, int flags)
 {
     motion_t m;
     if (!a->device)
         msg_exit ("%s: no serial device configured", name);
-    if (!(m = motion_init (a->device, name, debug ? MOTION_DEBUG : 0)))
+    if (!(m = motion_init (a->device, name, flags)))
         err_exit ("%s: init %s", name, a->device);
     if (motion_set_current (m, a->ihold, a->irun) < 0)
         err_exit ("%s: set current", name);

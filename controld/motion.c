@@ -233,6 +233,11 @@ motion_t motion_init (const char *devname, const char *name, int flags)
     if (mopen (m) < 0)
         goto error;
 
+    /* Preserve the operating state (avoid setting origin)
+     */
+    if (m->flags & MOTION_SOFTINIT)
+        goto done;
+
     /* Opening dialog
      */
     if (mputs (m, "\003") < 0)      /* send ctrl-C to reset */
@@ -256,6 +261,7 @@ motion_t motion_init (const char *devname, const char *name, int flags)
         goto error;
     if (mcmd (m, "M0") < 0)         /* stop any motion */
         goto error;
+done:
     if (mping (m, 2) < 0)
         goto error;
     return m;

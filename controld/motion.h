@@ -5,6 +5,7 @@
  */
 enum {
     MOTION_DEBUG = 0x01,
+    MOTION_SOFTINIT = 0x02,
 };
 
 typedef struct motion_struct *motion_t;
