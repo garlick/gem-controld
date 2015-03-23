@@ -1,6 +1,6 @@
 include Makefile.inc
 
-SUBDIRS = libutil libini cmd controld etc dts
+SUBDIRS = libutil libini libcommon cmd controld etc dts
 
 all:
 

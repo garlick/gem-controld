@@ -35,40 +35,16 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "libini/ini.h"
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
 #include "libutil/gpio.h"
 #include "libutil/ev_zmq.h"
+#include "libcommon/configfile.h"
 
 #include "motion.h"
 #include "hpad.h"
 
 char *prog = "";
-
-typedef struct {
-    char *device;
-    int mode;
-    int resolution;
-    int track;
-    int slow;
-    int fast;
-    int ihold;
-    int irun;
-    int accel;
-    int decel;
-} opt_axis_t;
-
-typedef struct {
-    opt_axis_t ra;
-    opt_axis_t dec;
-    bool debug;
-    bool no_motion;
-    bool soft_init;
-    char *hpad_gpio;
-    double hpad_debounce;
-    char *req_uri;
-} opt_t;
 
 typedef struct {
     opt_t opt;
@@ -79,13 +55,9 @@ typedef struct {
     bool stopped;
 } ctx_t;
 
-char *config_filename = CONFIG_FILENAME;
-
-int config_cb (void *user, const char *section, const char *name,
-               const char *value);
 void hpad_cb (hpad_t h, void *arg);
-motion_t init_axis (opt_axis_t *a, const char *name, int flags);
 
+motion_t init_axis (opt_axis_t *a, const char *name, int flags);
 
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
@@ -117,6 +89,7 @@ int main (int argc, char *argv[])
     struct ev_loop *loop;
     int ch;
     ctx_t ctx;
+    char *config_filename = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -130,15 +103,7 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (config_filename) {
-        int rc = ini_parse (config_filename, config_cb, &ctx.opt);
-        if (rc == -1) /* file open error */
-            err_exit ("%s", config_filename);
-        else if (rc == -2) /* out of memory */
-            errn_exit (ENOMEM, "%s", config_filename);
-        else if (rc > 0) /* line number */
-            msg_exit ("%s: parse error on line %d", config_filename, rc);
-    }
+    configfile_init (config_filename, &ctx.opt);
 
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -322,68 +287,6 @@ motion_t init_axis (opt_axis_t *a, const char *name, int flags)
     if (motion_set_velocity (m, a->track) < 0)
         err_exit ("%s: set velocity", name);
     return m;
-}
-
-int config_axis (opt_axis_t *a, const char *name, const char *value)
-{
-    int rc = 1; /* 0 = error */
-    if (!strcmp (name, "device")) {
-        if (a->device)
-            free (a->device);
-        a->device = xstrdup (value);
-    } else if (!strcmp (name, "resolution"))
-        a->resolution = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "mode"))
-        a->mode = !strcmp (value, "auto") ? 1 : 0;
-    else if (!strcmp (name, "slow"))
-        a->slow = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "fast"))
-        a->fast = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "track"))
-        a->track = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "ihold"))
-        a->ihold = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "irun"))
-        a->irun= strtoul (value, NULL, 10);
-    else if (!strcmp (name, "accel"))
-        a->accel = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "decel"))
-        a->decel = strtoul (value, NULL, 10);
-    return rc;
-}
-
-int config_cb (void *user, const char *section, const char *name,
-               const char *value)
-{
-    opt_t *opt = user;
-    int rc = 1; /* 0 = error */
-
-    if (!strcmp (section, "general")) {
-        if (!strcmp (name, "debug")) {
-            if (!strcmp (value, "yes"))
-                opt->debug = true;
-            else if (!strcmp (value, "no"))
-                opt->debug = false;
-        }
-    } else if (!strcmp (section, "ra"))
-        rc = config_axis (&opt->ra, name, value);
-    else if (!strcmp (section, "dec"))
-        rc = config_axis (&opt->dec, name, value);
-    else if (!strcmp (section, "hpad")) {
-        if (!strcmp (name, "gpio")) {
-            if (opt->hpad_gpio)
-                free (opt->hpad_gpio);
-            opt->hpad_gpio = xstrdup (value);
-        } else if (!strcmp (name, "debounce"))
-            opt->hpad_debounce = strtod (value, NULL);
-    } else if (!strcmp (section, "sockets")) {
-        if (!strcmp (name, "req")) {
-            if (opt->req_uri)
-                free (opt->req_uri);
-            opt->req_uri = xstrdup (value);
-        } 
-    }
-    return rc;
 }
 
 void hpad_cb (hpad_t h, void *arg)

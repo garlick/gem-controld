@@ -1,0 +1,16 @@
+include ../Makefile.inc
+
+CFLAGS = -I$(abs_topdir) -DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
+LIBS = -L$(abs_topdir)/libutil -lutil
+
+OBJS = configfile.o
+
+all: libcommon.a
+
+libcommon.a: $(OBJS)
+	$(AR) rv $@ $^
+
+install_cli install:
+
+clean:
+	rm -f *.a *.o

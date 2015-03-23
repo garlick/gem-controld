@@ -35,18 +35,13 @@
 #include <zmq.h>
 #include <czmq.h>
 
-#include "libini/ini.h"
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
 #include "libutil/gpio.h"
 #include "libutil/ev_zmq.h"
+#include "libcommon/configfile.h"
 
 char *prog = "";
-
-typedef struct {
-    bool debug;
-    char *req_uri;
-} opt_t;
 
 typedef struct {
     opt_t opt;
@@ -57,11 +52,6 @@ typedef struct {
     const char *name;
     void (*fun)(ctx_t *ctx, int ac, char **av);
 } op_t;
-
-char *config_filename = CONFIG_FILENAME;
-
-int config_cb (void *user, const char *section, const char *name,
-               const char *value);
 
 void op_position (ctx_t *ctx, int ac, char **av);
 void op_stop (ctx_t *ctx, int ac, char **av);
@@ -111,6 +101,7 @@ int main (int argc, char *argv[])
     int ch;
     ctx_t ctx;
     op_t *op;
+    char *config_filename = NULL;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -124,15 +115,7 @@ int main (int argc, char *argv[])
                 break;
         }
     }
-    if (config_filename) {
-        int rc = ini_parse (config_filename, config_cb, &ctx.opt);
-        if (rc == -1) /* file open error */
-            err_exit ("%s", config_filename);
-        else if (rc == -2) /* out of memory */
-            errn_exit (ENOMEM, "%s", config_filename);
-        else if (rc > 0) /* line number */
-            msg_exit ("%s: parse error on line %d", config_filename, rc);
-    }
+    configfile_init (config_filename, &ctx.opt);
 
     optind = 0;
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
@@ -253,23 +236,6 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         return;
     }
     msg ("goto %d, %d", x, y);
-}
-
-
-int config_cb (void *user, const char *section, const char *name,
-               const char *value)
-{
-    opt_t *opt = user;
-    int rc = 1; /* 0 = error */
-
-    if (!strcmp (section, "sockets")) {
-        if (!strcmp (name, "req")) {
-            if (opt->req_uri)
-                free (opt->req_uri);
-            opt->req_uri = xstrdup (value);
-        } 
-    }
-    return rc;
 }
 
 /*
