@@ -76,6 +76,7 @@ typedef struct {
     motion_t ra, dec;
     zsock_t *zreq;
     ev_zmq req_watcher;
+    bool stopped;
 } ctx_t;
 
 char *config_filename = CONFIG_FILENAME;
@@ -242,6 +243,7 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             if (motion_set_velocity (ctx->dec, 0) < 0)
                 goto done;
+            ctx->stopped = true;
             x = 0;
             y = 0;
             rc = 0;
@@ -254,6 +256,7 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             x = ctx->opt.ra.track;
             y = ctx->opt.dec.track;
+            ctx->stopped = false;
             rc = 0;
             break;
         }
@@ -270,6 +273,7 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             if (motion_set_origin (ctx->dec) < 0)
                 goto done;
+            ctx->stopped = true;
             x = 0;
             y = 0;
             rc = 0;
@@ -388,9 +392,11 @@ void hpad_cb (hpad_t h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            if (motion_set_velocity (ctx->ra, ctx->opt.ra.track) < 0)
+            int x = ctx->stopped ? 0 : ctx->opt.ra.track;
+            int y = ctx->stopped ? 0 : ctx->opt.dec.track;
+            if (motion_set_velocity (ctx->ra, x) < 0)
                 err_exit ("ra: set velocity");
-            if (motion_set_velocity (ctx->dec, ctx->opt.dec.track) < 0)
+            if (motion_set_velocity (ctx->dec, y) < 0)
                 err_exit ("dec: set velocity");
             break;
         }
@@ -418,8 +424,15 @@ void hpad_cb (hpad_t h, void *arg)
                 err_exit ("ra: set velocity");
             break;
         } 
-        case HPAD_KEY_M1:
-        case HPAD_KEY_M2:
+        case HPAD_KEY_M1: /* zero */
+            if (motion_set_origin (ctx->ra) < 0)
+                err_exit ("ra: set origin");
+            if (motion_set_origin (ctx->dec) < 0)
+                err_exit ("dec: set origin");
+            ctx->stopped = true;
+            break;
+        case HPAD_KEY_M2: /* toggle stop */
+            ctx->stopped = !ctx->stopped;
             break;
     }
 }
