@@ -40,6 +40,7 @@
 #include "libutil/gpio.h"
 #include "libutil/ev_zmq.h"
 #include "libcommon/configfile.h"
+#include "libcommon/gmsg.h"
 
 #include "motion.h"
 #include "hpad.h"
@@ -178,94 +179,134 @@ int main (int argc, char *argv[])
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
     ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, req_watcher));
-    zframe_t *sender = NULL;
-    int op, x, y;
-    int errnum;
     int rc = -1;
+    gmsg_t g;
+    uint8_t op;
 
-    if (!(sender = zframe_recv (ctx->zreq))) {
-        err ("zframe_recv");
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
         goto done_noreply;
     }
-    if (zsock_recv (ctx->zreq, "iii", &op, &x, &y) < 0) {
-        err ("zsock_recv");
-        goto done_noreply;
-    }
+
+    if (ctx->opt.debug)
+        gmsg_dump (stderr, g, "recv");
+    if (gmsg_get_op (g, &op) < 0)
+        goto done;
     switch (op) {
-        case 0: { /* position */
+        case OP_POSITION: {
             double ra, dec;
             if (motion_get_position (ctx->ra, &ra) < 0)
                 goto done;
             if (motion_get_position (ctx->dec, &dec) < 0)
                 goto done;
-            x = (int)ra;
-            y = (int)dec;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
+            if (gmsg_set_arg1 (g, (int32_t)ra) < 0)
+                goto done;
+            if (gmsg_set_arg2 (g, (int32_t)dec) < 0)
+                goto done;
             rc = 0;
             break;
         }
-        case 1: { /* stop */
+        case OP_STOP: {
             if (motion_set_velocity (ctx->ra, 0) < 0)
                 goto done;
             if (motion_set_velocity (ctx->dec, 0) < 0)
                 goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
             ctx->stopped = true;
-            x = 0;
-            y = 0;
             rc = 0;
             break;
         }
-        case 2: { /* track */
-            if (motion_set_velocity (ctx->ra, ctx->opt.ra.track) < 0)
+        case OP_TRACK: {
+            uint32_t flags;
+            int32_t x = ctx->opt.ra.track;
+            int32_t y = ctx->opt.dec.track;
+            if (gmsg_get_flags (g, &flags) < 0)
                 goto done;
-            if (motion_set_velocity (ctx->dec, ctx->opt.dec.track) < 0)
+            if ((flags & FLAG_ARG1) && gmsg_get_arg1 (g, &x) < 0)
                 goto done;
-            x = ctx->opt.ra.track;
-            y = ctx->opt.dec.track;
-            ctx->stopped = false;
-            rc = 0;
-            break;
-        }
-        case 3: { /* track [args] */
+            if ((flags & FLAG_ARG2) && gmsg_get_arg2 (g, &y) < 0)
+                goto done;
             if (motion_set_velocity (ctx->ra, x) < 0)
                 goto done;
             if (motion_set_velocity (ctx->dec, y) < 0)
                 goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
+            if (gmsg_set_arg1 (g, x) < 0)
+                goto done;
+            if (gmsg_set_arg2 (g, y) < 0)
+                goto done;
+            ctx->stopped = false;
             rc = 0;
             break;
         }
-        case 4: { /* zero */
+        case OP_ORIGIN: {
             if (motion_set_origin (ctx->ra) < 0)
                 goto done;
             if (motion_set_origin (ctx->dec) < 0)
                 goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
             ctx->stopped = true;
-            x = 0;
-            y = 0;
             rc = 0;
             break;
         }
-        case 5: { /* goto */
+        case OP_GOTO: {
+            int32_t x, y;
+            if (gmsg_get_arg1 (g, &x) < 0)
+                goto done;
+            if (gmsg_get_arg2 (g, &y) < 0)
+                goto done;
             if (motion_set_position (ctx->ra, (double)x) < 0)
                 goto done;
             if (motion_set_position (ctx->dec, (double)y) < 0)
                 goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
             ctx->stopped = true;
             rc = 0;
             break;
         }
+        case OP_PARK: { /* FIXME: make park position configurable */
+            if (motion_set_position (ctx->ra, 0) < 0)
+                goto done;
+            if (motion_set_position (ctx->dec, 0) < 0)
+                goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
+            ctx->stopped = true;
+            rc = 0;
+            break;
+        }
+        case OP_STEPS: { /* FIXME not implemented yet */
+#if 0
+            if (gmsg_set_arg1 (g, ctx->opt.ra.steps) < 0)
+                goto done;
+            if (gmsg_set_arg2 (g, ctx->opt.dec.steps) < 0)
+                goto done;
+            rc = 0;
+#else
+            errno = ENOSYS;
+            goto done;
+#endif
+        }
     }
 done:
-    errnum = errno;
-    if (zframe_send (&sender, ctx->zreq, ZFRAME_MORE) < 0) {
-        err ("zframe_send");
+    if (rc != 0 && gmsg_set_error (g, errno) < 0) {
+        err ("gmsg_set_error");
         goto done_noreply;
     }
-    if (zsock_send (ctx->zreq, "iii", rc, rc < 0 ? errnum : x, y) < 0) {
-        err ("zsock_send");
+    if (ctx->opt.debug)
+        gmsg_dump (stderr, g, "send");
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
         goto done_noreply;
     }
 done_noreply:
-    zframe_destroy (&sender);
+    gmsg_destroy (&g);
     return;
 }
 

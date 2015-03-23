@@ -3,7 +3,7 @@ include ../Makefile.inc
 CFLAGS = -I$(abs_topdir) -DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
 LIBS = -L$(abs_topdir)/libutil -lutil
 
-OBJS = configfile.o
+OBJS = configfile.o gmsg.o
 
 all: libcommon.a
 

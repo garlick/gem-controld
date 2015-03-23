@@ -40,6 +40,7 @@
 #include "libutil/gpio.h"
 #include "libutil/ev_zmq.h"
 #include "libcommon/configfile.h"
+#include "libcommon/gmsg.h"
 
 char *prog = "";
 
@@ -58,6 +59,7 @@ void op_stop (ctx_t *ctx, int ac, char **av);
 void op_track (ctx_t *ctx, int ac, char **av);
 void op_zero (ctx_t *ctx, int ac, char **av);
 void op_goto (ctx_t *ctx, int ac, char **av);
+void op_park (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
@@ -65,6 +67,7 @@ static op_t ops[] = {
     { "track",    op_track},
     { "zero",     op_zero},
     { "goto",     op_goto},
+    { "park",     op_park},
 };
 
 #define OPTIONS "+c:h"
@@ -81,6 +84,7 @@ static void usage (void)
 "                     stop\n"
 "                     track [x y]\n"
 "                     zero\n"
+"                     park\n"
 "OPTIONS:\n"
 "    -c,--config FILE         set path to config file\n"
 );
@@ -146,96 +150,203 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int do_request (ctx_t *ctx, int op, int *x, int *y)
-{
-    int rc = -1;
-    int outx, outy, outrc;
-
-    if (zsock_send (ctx->zreq, "iii", op, *x, *y) < 0) {
-        err ("zstr_send");
-        goto done;
-    }
-    if (zsock_recv (ctx->zreq, "iii", &outrc, &outx, &outy) < 0) {
-        err ("zstr_recv");
-        goto done;
-    }
-    rc = outrc;
-    if (rc < 0)
-        errno = outx;
-    else {
-        if (x)
-            *x = outx;
-        if (y)
-            *y = outy;
-    }
-done:
-    return rc;
-}
-
 void op_position (ctx_t *ctx, int ac, char **av)
 {
-    int x = 0, y = 0;
+    int32_t x, y;
+    gmsg_t g = NULL;
 
-    if (do_request (ctx, 0, &x, &y) < 0) {
-        err ("get position");
-        return;
+    if (ac != 0) {
+        msg ("position takes no arguments");
+        goto done;
+    }
+    if (!(g = gmsg_create (OP_POSITION))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &x) < 0
+                           || gmsg_get_arg2 (g, &y) < 0) {
+        err ("server error");
+        goto done;
     }
     msg ("%d, %d", x, y);
+done:
+    gmsg_destroy (&g);
 }
 
 void op_stop (ctx_t *ctx, int ac, char **av)
 {
-    int x, y;
-    if (do_request (ctx, 1, &x, &y) < 0) {
-        err ("stop");
-        return;
+    gmsg_t g = NULL;
+
+    if (ac != 0) {
+        msg ("stop takes no arguments");
+        goto done;
     }
-    msg ("stopped %d, %d", x, y);
+    if (!(g = gmsg_create (OP_STOP))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("stopped");
+done:
+    gmsg_destroy (&g);
 }
 
 void op_track (ctx_t *ctx, int ac, char **av)
 {
-    int x, y;
-    if (ac != 2) {
-        if (do_request (ctx, 2, &x, &y) < 0){
-            err ("track");
-            return;
-        }
-    } else {
-        x = strtoul (av[0], NULL, 10);
-        y = strtoul (av[1], NULL, 10);
-        if (do_request (ctx, 3, &x, &y) < 0){
-            err ("track");
-            return;
-        }
+    int32_t x, y;
+    gmsg_t g = NULL;
+
+    if (ac > 2) {
+        msg ("track takes 0 or 2 arguments");
+        goto done;
     }
-    msg ("tracking %d, %d", x, y);
+    if (!(g = gmsg_create (OP_TRACK))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (ac == 2) {
+        x = strtol (av[0], NULL, 10);
+        y = strtol (av[1], NULL, 10);
+        if (gmsg_set_arg1 (g, x) < 0)
+            err ("gmsg_set_arg1");
+        if (gmsg_set_arg2 (g, y) < 0)
+            err ("gmsg_set_arg2");
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &x) < 0
+                           || gmsg_get_arg2 (g, &y) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("%d, %d", x, y);
+done:
+    gmsg_destroy (&g);
 }
 
 void op_zero (ctx_t *ctx, int ac, char **av)
 {
-    int x, y;
-    if (do_request (ctx, 4, &x, &y) < 0){
-        err ("zero");
-        return;
+    gmsg_t g = NULL;
+
+    if (ac != 0) {
+        msg ("zero takes no arguments");
+        goto done;
     }
-    msg ("zero %d, %d", x, y);
+    if (!(g = gmsg_create (OP_ORIGIN))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("origin set");
+done:
+    gmsg_destroy (&g);
 }
 
 void op_goto (ctx_t *ctx, int ac, char **av)
 {
-    int x, y;
+    int32_t x, y;
+    gmsg_t g = NULL;
+
     if (ac != 2) {
-        msg ("goto takes two arguments");
-        return;
+        msg ("goto takes 2 arguments");
+        goto done;
     }
-    x = strtoul (av[0], NULL, 10);
-    y = strtoul (av[1], NULL, 10);
-    if (do_request (ctx, 5, &x, &y) < 0){
-        err ("goto");
-        return;
+    if (!(g = gmsg_create (OP_GOTO))) {
+        err ("gmsg_create");
+        goto done;;
     }
-    msg ("goto %d, %d", x, y);
+    x = strtol (av[0], NULL, 10);
+    y = strtol (av[1], NULL, 10);
+    if (gmsg_set_arg1 (g, x) < 0)
+        err ("gmsg_set_arg1");
+    if (gmsg_set_arg2 (g, y) < 0)
+        err ("gmsg_set_arg2");
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("slewing to %d, %d", x, y);
+done:
+    gmsg_destroy (&g);
+}
+
+void op_park (ctx_t *ctx, int ac, char **av)
+{
+    gmsg_t g = NULL;
+
+    if (ac != 0) {
+        msg ("park takes no arguments");
+        goto done;
+    }
+    if (!(g = gmsg_create (OP_PARK))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("parking");
+done:
+    gmsg_destroy (&g);
 }
 
 /*
