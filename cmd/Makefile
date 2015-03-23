@@ -12,7 +12,7 @@ gem: gem.o
 	$(CC) -o $@ $^ $(LIBS)
 
 install: gem
-	cp gem-controld $(prefix)/bin/gem
+	cp gem $(prefix)/bin/gem
 
 clean:
 	rm -f *.o gem
