@@ -12,7 +12,9 @@ gem-controld: hpad.o motion.o gem.o
 	$(CC) -o $@ $^ $(LIBS)
 
 install: gem-controld
+	systemctl stop gem.service
 	cp gem-controld $(prefix)/sbin/gem-controld
+	systemctl start gem.service
 
 install_cli:
 

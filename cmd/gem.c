@@ -64,9 +64,15 @@ int config_cb (void *user, const char *section, const char *name,
                const char *value);
 
 void op_position (ctx_t *ctx, int ac, char **av);
+void op_stop (ctx_t *ctx, int ac, char **av);
+void op_track (ctx_t *ctx, int ac, char **av);
+void op_zero (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
+    { "stop",     op_stop},
+    { "track",    op_track},
+    { "zero",     op_zero},
 };
 
 #define OPTIONS "+c:h"
@@ -79,7 +85,11 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: gem position\n"
+"Usage: gem [OPTIONS] position\n"
+"                     stop\n"
+"                     track [x y]\n"
+"                     zero\n"
+"OPTIONS:\n"
 "    -c,--config FILE         set path to config file\n"
 );
     exit (1);
@@ -151,19 +161,80 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+int do_request (ctx_t *ctx, int op, int *x, int *y)
+{
+    int rc = -1;
+    int outx, outy, outrc;
+
+    if (zsock_send (ctx->zreq, "iii", op, *x, *y) < 0) {
+        err ("zstr_send");
+        goto done;
+    }
+    if (zsock_recv (ctx->zreq, "iii", &outrc, &outx, &outy) < 0) {
+        err ("zstr_recv");
+        goto done;
+    }
+    rc = outrc;
+    if (rc < 0)
+        errno = outx;
+    else {
+        if (x)
+            *x = outx;
+        if (y)
+            *y = outy;
+    }
+done:
+    return rc;
+}
+
 void op_position (ctx_t *ctx, int ac, char **av)
 {
-    int rc, x, y;
+    int x = 0, y = 0;
 
-    if (zsock_send (ctx->zreq, "iii", 0, 0, 0) < 0) {
-        err ("zstr_send");
+    if (do_request (ctx, 0, &x, &y) < 0) {
+        err ("get position");
         return;
     }
-    if (zsock_recv (ctx->zreq, "iii", &rc, &x, &y) < 0) {
-        err ("zstr_recv");
+    msg ("%d, %d", x, y);
+}
+
+void op_stop (ctx_t *ctx, int ac, char **av)
+{
+    int x, y;
+    if (do_request (ctx, 1, &x, &y) < 0) {
+        err ("stop");
         return;
     }
-    msg ("%d, %d, %d", rc, x, y);
+    msg ("stopped %d, %d", x, y);
+}
+
+void op_track (ctx_t *ctx, int ac, char **av)
+{
+    int x, y;
+    if (ac != 2) {
+        if (do_request (ctx, 2, &x, &y) < 0){
+            err ("track");
+            return;
+        }
+    } else {
+        x = strtoul (av[0], NULL, 10);
+        y = strtoul (av[1], NULL, 10);
+        if (do_request (ctx, 3, &x, &y) < 0){
+            err ("track");
+            return;
+        }
+    }
+    msg ("tracking %d, %d", x, y);
+}
+
+void op_zero (ctx_t *ctx, int ac, char **av)
+{
+    int x, y;
+    if (do_request (ctx, 4, &x, &y) < 0){
+        err ("zero");
+        return;
+    }
+    msg ("zero %d, %d", x, y);
 }
 
 int config_cb (void *user, const char *section, const char *name,

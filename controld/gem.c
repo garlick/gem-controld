@@ -201,17 +201,18 @@ int main (int argc, char *argv[])
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
 {
     ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, req_watcher));
-    zframe_t *sender;
+    zframe_t *sender = NULL;
     int op, x, y;
+    int errnum;
     int rc = -1;
 
     if (!(sender = zframe_recv (ctx->zreq))) {
         err ("zframe_recv");
-        goto done;
+        goto done_noreply;
     }
     if (zsock_recv (ctx->zreq, "iii", &op, &x, &y) < 0) {
         err ("zsock_recv");
-        goto done;
+        goto done_noreply;
     }
     switch (op) {
         case 0: { /* position */
@@ -225,16 +226,57 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             rc = 0;
             break;
         }
-    }
-    if (zframe_send (&sender, ctx->zreq, ZFRAME_MORE) < 0) {
-        err ("zframe_send");
-        goto done;
+        case 1: { /* stop */
+            if (motion_set_velocity (ctx->ra, 0) < 0)
+                goto done;
+            if (motion_set_velocity (ctx->dec, 0) < 0)
+                goto done;
+            x = 0;
+            y = 0;
+            rc = 0;
+            break;
+        }
+        case 2: { /* track */
+            if (motion_set_velocity (ctx->ra, ctx->opt.ra.track) < 0)
+                goto done;
+            if (motion_set_velocity (ctx->dec, ctx->opt.dec.track) < 0)
+                goto done;
+            x = ctx->opt.ra.track;
+            y = ctx->opt.dec.track;
+            rc = 0;
+            break;
+        }
+        case 3: { /* track [args] */
+            if (motion_set_velocity (ctx->ra, x) < 0)
+                goto done;
+            if (motion_set_velocity (ctx->dec, y) < 0)
+                goto done;
+            rc = 0;
+            break;
+        }
+        case 4: { /* zero */
+            if (motion_set_origin (ctx->ra) < 0)
+                goto done;
+            if (motion_set_origin (ctx->dec) < 0)
+                goto done;
+            x = 0;
+            y = 0;
+            rc = 0;
+            break;
+        }
     }
 done:
-    if (zsock_send (ctx->zreq, "iii", rc, x, y) < 0) {
-        err ("zsock_send");
-	goto done;
+    errnum = errno;
+    if (zframe_send (&sender, ctx->zreq, ZFRAME_MORE) < 0) {
+        err ("zframe_send");
+        goto done_noreply;
     }
+    if (zsock_send (ctx->zreq, "iii", rc, rc < 0 ? errnum : x, y) < 0) {
+        err ("zsock_send");
+        goto done_noreply;
+    }
+done_noreply:
+    zframe_destroy (&sender);
     return;
 }
 
