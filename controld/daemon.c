@@ -356,8 +356,10 @@ void hpad_cb (hpad_t h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            int x = ctx->stopped ? 0 : ctx->opt.ra.track;
-            int y = ctx->stopped ? 0 : ctx->opt.dec.track;
+            int x = ctx->opt.ra.track;
+            int y = ctx->opt.dec.track;
+            if (ctx->stopped || !ctx->zeroed)
+                x = y = 0;
             if (motion_set_velocity (ctx->ra, x) < 0)
                 err_exit ("ra: set velocity");
             if (motion_set_velocity (ctx->dec, y) < 0)
