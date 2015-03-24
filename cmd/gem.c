@@ -60,6 +60,7 @@ void op_track (ctx_t *ctx, int ac, char **av);
 void op_zero (ctx_t *ctx, int ac, char **av);
 void op_goto (ctx_t *ctx, int ac, char **av);
 void op_park (ctx_t *ctx, int ac, char **av);
+void op_steps (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
@@ -68,6 +69,7 @@ static op_t ops[] = {
     { "zero",     op_zero},
     { "goto",     op_goto},
     { "park",     op_park},
+    { "steps",    op_steps},
 };
 
 #define OPTIONS "+c:h"
@@ -345,6 +347,38 @@ void op_park (ctx_t *ctx, int ac, char **av)
         goto done;
     }
     msg ("parking");
+done:
+    gmsg_destroy (&g);
+}
+
+void op_steps (ctx_t *ctx, int ac, char **av)
+{
+    int32_t x, y;
+    gmsg_t g = NULL;
+
+    if (ac != 0) {
+        msg ("steps takes no arguments");
+        goto done;
+    }
+    if (!(g = gmsg_create (OP_STEPS))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &x) < 0
+                           || gmsg_get_arg2 (g, &y) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("%d, %d", x, y);
 done:
     gmsg_destroy (&g);
 }

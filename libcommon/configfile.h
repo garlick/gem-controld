@@ -9,6 +9,7 @@ typedef struct {
     int irun;
     int accel;
     int decel;
+    int steps;
 } opt_axis_t;
 
 typedef struct {

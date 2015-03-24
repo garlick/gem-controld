@@ -71,6 +71,8 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->accel = strtoul (value, NULL, 10);
     else if (!strcmp (name, "decel"))
         a->decel = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "steps"))
+        a->steps = strtoul (value, NULL, 10);
     return rc;
 }
 
