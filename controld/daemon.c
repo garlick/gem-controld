@@ -304,16 +304,6 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             rc = 0;
             break;
         }
-        case OP_STEPS: {
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            if (gmsg_set_arg1 (g, ctx->opt.ra.steps) < 0)
-                goto done;
-            if (gmsg_set_arg2 (g, ctx->opt.dec.steps) < 0)
-                goto done;
-            rc = 0;
-            break;
-        }
     }
 done:
     if (rc != 0 && gmsg_set_error (g, errno) < 0) {
