@@ -58,9 +58,9 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
     else if (!strcmp (name, "mode"))
         a->mode = !strcmp (value, "auto") ? 1 : 0;
     else if (!strcmp (name, "slow"))
-        a->slow = strtoul (value, NULL, 10);
+        a->slow = strtod (value, NULL);
     else if (!strcmp (name, "fast"))
-        a->fast = strtoul (value, NULL, 10);
+        a->fast = strtod (value, NULL);
     else if (!strcmp (name, "ihold"))
         a->ihold = strtoul (value, NULL, 10);
     else if (!strcmp (name, "irun"))

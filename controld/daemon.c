@@ -374,26 +374,34 @@ void hpad_cb (hpad_t h, void *arg)
             break;
         }
         case HPAD_KEY_NORTH: {
-            int v = (fast ? ctx->opt.dec.fast : ctx->opt.dec.slow);
+            int v = controller_velocity (&ctx->opt.dec,
+                                                    fast ? ctx->opt.dec.fast
+                                                         : ctx->opt.dec.slow);
             if (motion_set_velocity (ctx->dec, v) < 0)
                 err_exit ("dec: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: {
-            int v = -1 * (fast ? ctx->opt.dec.fast : ctx->opt.dec.slow);
-            if (motion_set_velocity (ctx->dec, v) < 0)
+            int v = controller_velocity (&ctx->opt.dec,
+                                                    fast ? ctx->opt.dec.fast
+                                                         : ctx->opt.dec.slow);
+            if (motion_set_velocity (ctx->dec, -1*v) < 0)
                 err_exit ("dec: set velocity");
             break;
         }
         case HPAD_KEY_WEST: {
-            int v = (fast ? ctx->opt.ra.fast : ctx->opt.ra.slow);
+            int v = controller_velocity (&ctx->opt.ra,
+                                                    fast ? ctx->opt.ra.fast
+                                                         : ctx->opt.ra.slow);
             if (motion_set_velocity (ctx->ra, v) < 0)
                 err_exit ("ra: set velocity");
             break;
         }
         case HPAD_KEY_EAST: {
-            int v = -1 * (fast ? ctx->opt.ra.fast : ctx->opt.ra.slow);
-            if (motion_set_velocity (ctx->ra, v) < 0)
+            int v = controller_velocity (&ctx->opt.ra,
+                                                    fast ? ctx->opt.ra.fast
+                                                         : ctx->opt.ra.slow);
+            if (motion_set_velocity (ctx->ra, -1*v) < 0)
                 err_exit ("ra: set velocity");
             break;
         } 

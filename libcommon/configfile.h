@@ -2,13 +2,13 @@ typedef struct {
     char *device;
     int mode;
     int resolution;
-    int slow;
-    int fast;
     int ihold;
     int irun;
     int accel;
     int decel;
     int steps;
+    double slow;
+    double fast;
 } opt_axis_t;
 
 typedef struct {
