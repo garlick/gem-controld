@@ -54,6 +54,7 @@ typedef struct {
     zsock_t *zreq;
     ev_zmq req_watcher;
     bool stopped;
+    bool zeroed;
 } ctx_t;
 
 void hpad_cb (hpad_t h, void *arg);
@@ -116,6 +117,7 @@ int main (int argc, char *argv[])
                 break;
             case 'n':   /* --no-motion */
                 ctx.opt.no_motion = true;
+                ctx.zeroed = true;
                 break;
             case 's':   /* --soft-init */
                 ctx.opt.soft_init = true;
@@ -194,6 +196,10 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         goto done;
     switch (op) {
         case OP_POSITION: {
+            if (!ctx->zeroed) {
+                errno = EINVAL;
+                goto done;
+            }
             double ra, dec;
             if (motion_get_position (ctx->ra, &ra) < 0)
                 goto done;
@@ -251,11 +257,16 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
             ctx->stopped = true;
+            ctx->zeroed = true;
             rc = 0;
             break;
         }
         case OP_GOTO: {
             int32_t x, y;
+            if (!ctx->zeroed) {
+                errno = EINVAL;
+                goto done;
+            }
             if (gmsg_get_arg1 (g, &x) < 0)
                 goto done;
             if (gmsg_get_arg2 (g, &y) < 0)
@@ -271,6 +282,10 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_PARK: { /* FIXME: make park position configurable */
+            if (!ctx->zeroed) {
+                errno = EINVAL;
+                goto done;
+            }
             if (motion_set_position (ctx->ra, 0) < 0)
                 goto done;
             if (motion_set_position (ctx->dec, 0) < 0)
@@ -323,8 +338,6 @@ motion_t init_axis (opt_axis_t *a, const char *name, int flags)
         err_exit ("%s: set resolution", name);
     if (motion_set_acceleration (m, a->accel, a->decel) < 0)
         err_exit ("%s: set acceleration", name);
-    if (motion_set_velocity (m, a->track) < 0)
-        err_exit ("%s: set velocity", name);
     return m;
 }
 
@@ -381,6 +394,7 @@ void hpad_cb (hpad_t h, void *arg)
             if (motion_set_origin (ctx->dec) < 0)
                 err_exit ("dec: set origin");
             ctx->stopped = true;
+            ctx->zeroed = true;
             break;
         case HPAD_KEY_M2: /* toggle stop */
             ctx->stopped = !ctx->stopped;
