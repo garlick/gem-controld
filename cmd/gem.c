@@ -84,7 +84,7 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS] position\n"
 "                     stop\n"
-"                     track [x y]\n"
+"                     track [x y] (arcsec/sec)\n"
 "                     zero\n"
 "                     park\n"
 "OPTIONS:\n"
@@ -244,12 +244,11 @@ void op_track (ctx_t *ctx, int ac, char **av)
         err ("gmsg_recv");
         goto done;
     }
-    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &x) < 0
-                           || gmsg_get_arg2 (g, &y) < 0) {
+    if (gmsg_error (g) < 0) {
         err ("server error");
         goto done;
     }
-    msg ("%d, %d", x, y);
+    msg ("tracking");
 done:
     gmsg_destroy (&g);
 }

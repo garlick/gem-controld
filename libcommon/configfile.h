@@ -2,7 +2,6 @@ typedef struct {
     char *device;
     int mode;
     int resolution;
-    int track;
     int slow;
     int fast;
     int ihold;

@@ -61,8 +61,6 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->slow = strtoul (value, NULL, 10);
     else if (!strcmp (name, "fast"))
         a->fast = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "track"))
-        a->track = strtoul (value, NULL, 10);
     else if (!strcmp (name, "ihold"))
         a->ihold = strtoul (value, NULL, 10);
     else if (!strcmp (name, "irun"))

@@ -34,6 +34,7 @@
 #include <ev.h>
 #include <zmq.h>
 #include <czmq.h>
+#include <math.h>
 
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
@@ -44,6 +45,8 @@
 
 #include "motion.h"
 #include "hpad.h"
+
+const double sidereal_velocity = -15.0417; /* arcsec/sec */
 
 char *prog = "";
 
@@ -63,6 +66,7 @@ motion_t init_axis (opt_axis_t *a, const char *name, int flags);
 
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
+int controller_velocity (opt_axis_t *axis, double arcsec_persec);
 
 #define OPTIONS "+c:hdns"
 static const struct option longopts[] = {
@@ -227,23 +231,27 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         }
         case OP_TRACK: {
             uint32_t flags;
-            int32_t x = ctx->opt.ra.track;
-            int32_t y = ctx->opt.dec.track;
+            int y = 0;
+            int x = controller_velocity (&ctx->opt.ra, sidereal_velocity);
             if (gmsg_get_flags (g, &flags) < 0)
                 goto done;
-            if ((flags & FLAG_ARG1) && gmsg_get_arg1 (g, &x) < 0)
-                goto done;
-            if ((flags & FLAG_ARG2) && gmsg_get_arg2 (g, &y) < 0)
-                goto done;
+            if ((flags & FLAG_ARG1)) {
+                int32_t arg;
+                if (gmsg_get_arg1 (g, &arg) < 0)
+                    goto done;
+                x = controller_velocity (&ctx->opt.ra, (double)arg);
+            }
+            if ((flags & FLAG_ARG2)) {
+                int32_t arg;
+                if (gmsg_get_arg2 (g, &arg) < 0)
+                    goto done;
+                y = controller_velocity (&ctx->opt.dec, (double)arg);
+            }
             if (motion_set_velocity (ctx->ra, x) < 0)
                 goto done;
             if (motion_set_velocity (ctx->dec, y) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            if (gmsg_set_arg1 (g, x) < 0)
-                goto done;
-            if (gmsg_set_arg2 (g, y) < 0)
                 goto done;
             ctx->stopped = false;
             rc = 0;
@@ -356,13 +364,12 @@ void hpad_cb (hpad_t h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            int x = ctx->opt.ra.track;
-            int y = ctx->opt.dec.track;
-            if (ctx->stopped || !ctx->zeroed)
-                x = y = 0;
+            int x = 0;
+            if (!ctx->stopped && ctx->zeroed)
+                x = controller_velocity (&ctx->opt.ra, sidereal_velocity);
             if (motion_set_velocity (ctx->ra, x) < 0)
                 err_exit ("ra: set velocity");
-            if (motion_set_velocity (ctx->dec, y) < 0)
+            if (motion_set_velocity (ctx->dec, 0) < 0)
                 err_exit ("dec: set velocity");
             break;
         }
@@ -404,6 +411,22 @@ void hpad_cb (hpad_t h, void *arg)
     }
 }
 
+double tostep (opt_axis_t *axis, double arcsec)
+{
+    return arcsec * axis->steps / (360.0*60*60);
+}
+
+/* Calculate velocity in steps/sec for motion controller from arcsec/sec.
+ * Take into account controller velocity scaling in 'auto' mode.
+ */
+int controller_velocity (opt_axis_t *axis, double arcsec_persec)
+{
+    double steps_persec = tostep (axis, arcsec_persec);
+
+    if (axis->mode == 1)
+        steps_persec *= 1<<(axis->resolution);
+    return lrint (steps_persec);
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
