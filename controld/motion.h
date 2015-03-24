@@ -57,6 +57,10 @@ int motion_set_position (motion_t m, double position);
  */
 int motion_set_index (motion_t m, double offset);
 
+/* Abort any motion in progress.
+ */
+int motion_abort (motion_t m);
+
 /* Read moving status.
  * If status is nonzero, device is in motion.
  */
