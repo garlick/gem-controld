@@ -67,6 +67,8 @@ motion_t init_axis (opt_axis_t *a, const char *name, int flags);
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
 int controller_velocity (opt_axis_t *axis, double arcsec_persec);
+double controller_position (opt_axis_t *axis, double arcsec);
+double arcsec_fromcontroller (opt_axis_t *axis, double steps);
 
 #define OPTIONS "+c:hdns"
 static const struct option longopts[] = {
@@ -209,11 +211,13 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             if (motion_get_position (ctx->dec, &dec) < 0)
                 goto done;
+            double x = arcsec_fromcontroller (&ctx->opt.ra, ra);
+            double y = arcsec_fromcontroller (&ctx->opt.dec, dec);
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
-            if (gmsg_set_arg1 (g, (int32_t)ra) < 0)
+            if (gmsg_set_arg1 (g, (int32_t)(x*10)) < 0)
                 goto done;
-            if (gmsg_set_arg2 (g, (int32_t)dec) < 0)
+            if (gmsg_set_arg2 (g, (int32_t)(y*10)) < 0)
                 goto done;
             rc = 0;
             break;
@@ -239,13 +243,13 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 int32_t arg;
                 if (gmsg_get_arg1 (g, &arg) < 0)
                     goto done;
-                x = controller_velocity (&ctx->opt.ra, (double)arg);
+                x = controller_velocity (&ctx->opt.ra, 0.1*arg);
             }
             if ((flags & FLAG_ARG2)) {
                 int32_t arg;
                 if (gmsg_get_arg2 (g, &arg) < 0)
                     goto done;
-                y = controller_velocity (&ctx->opt.dec, (double)arg);
+                y = controller_velocity (&ctx->opt.dec, 0.1*arg);
             }
             if (motion_set_velocity (ctx->ra, x) < 0)
                 goto done;
@@ -270,18 +274,21 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_GOTO: {
-            int32_t x, y;
+            int32_t arg1, arg2;
+            double x, y;
             if (!ctx->zeroed) {
                 errno = EINVAL;
                 goto done;
             }
-            if (gmsg_get_arg1 (g, &x) < 0)
+            if (gmsg_get_arg1 (g, &arg1) < 0)
                 goto done;
-            if (gmsg_get_arg2 (g, &y) < 0)
+            if (gmsg_get_arg2 (g, &arg2) < 0)
                 goto done;
-            if (motion_set_position (ctx->ra, (double)x) < 0)
+            x = controller_position (&ctx->opt.ra, 0.1*arg1);
+            y = controller_position (&ctx->opt.dec, 0.1*arg2);
+            if (motion_set_position (ctx->ra, x) < 0)
                 goto done;
-            if (motion_set_position (ctx->dec, (double)y) < 0)
+            if (motion_set_position (ctx->dec, y) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -409,7 +416,16 @@ void hpad_cb (hpad_t h, void *arg)
     }
 }
 
-double tostep (opt_axis_t *axis, double arcsec)
+/* Return position in arcsec from controller steps
+ */
+double arcsec_fromcontroller (opt_axis_t *axis, double steps)
+{
+    return steps * (360.0*60*60) / axis->steps;
+}
+
+/* Calculate position in steps for motion controller from arcsec.
+ */
+double controller_position (opt_axis_t *axis, double arcsec)
 {
     return arcsec * axis->steps / (360.0*60*60);
 }
@@ -419,12 +435,13 @@ double tostep (opt_axis_t *axis, double arcsec)
  */
 int controller_velocity (opt_axis_t *axis, double arcsec_persec)
 {
-    double steps_persec = tostep (axis, arcsec_persec);
+    double steps_persec = controller_position (axis, arcsec_persec);
 
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);
     return lrint (steps_persec);
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
