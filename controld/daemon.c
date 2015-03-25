@@ -207,9 +207,9 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             double y = arcsec_fromcontroller (&ctx->opt.dec, dec);
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
-            if (gmsg_set_arg1 (g, (int32_t)(x*10)) < 0)
+            if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
                 goto done;
-            if (gmsg_set_arg2 (g, (int32_t)(y*10)) < 0)
+            if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
                 goto done;
             rc = 0;
             break;
@@ -233,13 +233,13 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 int32_t arg;
                 if (gmsg_get_arg1 (g, &arg) < 0)
                     goto done;
-                x = controller_velocity (&ctx->opt.ra, 0.1*arg);
+                x = controller_velocity (&ctx->opt.ra, 1E-2*arg);
             }
             if ((flags & FLAG_ARG2)) {
                 int32_t arg;
                 if (gmsg_get_arg2 (g, &arg) < 0)
                     goto done;
-                y = controller_velocity (&ctx->opt.dec, 0.1*arg);
+                y = controller_velocity (&ctx->opt.dec, 1E-2*arg);
             }
             if (motion_set_velocity (ctx->ra, x) < 0)
                 goto done;
@@ -268,8 +268,8 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             if (gmsg_get_arg2 (g, &arg2) < 0)
                 goto done;
-            x = controller_position (&ctx->opt.ra, 0.1*arg1);
-            y = controller_position (&ctx->opt.dec, 0.1*arg2);
+            x = controller_position (&ctx->opt.ra, 1E-2*arg1);
+            y = controller_position (&ctx->opt.dec, 1E-2*arg2);
             if (motion_set_position (ctx->ra, x) < 0)
                 goto done;
             if (motion_set_position (ctx->dec, y) < 0)

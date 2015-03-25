@@ -27,14 +27,16 @@ gmsg_t gmsg_recv (void *sock);
 int gmsg_send (void *sock, gmsg_t g);
 
 /* Operations
+ * Coordinate units are hundredth-arcsec 
+ * Velocity units are hundredth-arcsec/sec
  */
 enum {
     OP_ORIGIN = 0,      /* set origin to current position */
     OP_PARK = 1,        /* park the telescope and stop tracking */
     OP_STOP = 2,        /* stop tracking */
-    OP_TRACK = 3,       /* start tracking (opt. override in tenth-arcsec/sec) */
-    OP_GOTO = 4,        /* slew to specified coordinates (tenth-arcsec) */
-    OP_POSITION = 5,    /* get current position (tenth-arcsec) */
+    OP_TRACK = 3,       /* start tracking (optional args) */
+    OP_GOTO = 4,        /* slew to specified coordinates */
+    OP_POSITION = 5,    /* get current position */
 };
 
 /* Flags

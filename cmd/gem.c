@@ -178,7 +178,7 @@ void op_position (ctx_t *ctx, int ac, char **av)
         err ("server error");
         goto done;
     }
-    msg ("position: %.1f, %.1f", 0.1*x, 0.1*y);
+    msg ("position: %.2f, %.2f", 1E-2*x, 1E-2*y);
 done:
     gmsg_destroy (&g);
 }
@@ -229,9 +229,9 @@ void op_track (ctx_t *ctx, int ac, char **av)
     if (ac == 2) {
         x = strtod (av[0], NULL);
         y = strtod (av[1], NULL);
-        if (gmsg_set_arg1 (g, (int32_t)(10*x)) < 0)
+        if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
             err ("gmsg_set_arg1");
-        if (gmsg_set_arg2 (g, (int32_t)(10*y)) < 0)
+        if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
             err ("gmsg_set_arg2");
     }
     if (gmsg_send (ctx->zreq, g) < 0) {
@@ -297,9 +297,9 @@ void op_goto (ctx_t *ctx, int ac, char **av)
     }
     x = strtod (av[0], NULL);
     y = strtod (av[1], NULL);
-    if (gmsg_set_arg1 (g, (int32_t)(x*10)) < 0)
+    if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
         err ("gmsg_set_arg1");
-    if (gmsg_set_arg2 (g, (int32_t)(y*10)) < 0)
+    if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
         err ("gmsg_set_arg2");
     if (gmsg_send (ctx->zreq, g) < 0) {
         err ("gmsg_send");
@@ -314,7 +314,7 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         err ("server error");
         goto done;
     }
-    msg ("slewing to %.1f, %.1f", x, y);
+    msg ("slewing to %.2f, %.2f", x, y);
 done:
     gmsg_destroy (&g);
 }
