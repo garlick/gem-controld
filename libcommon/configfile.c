@@ -73,6 +73,8 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->steps = strtoul (value, NULL, 10);
     else if (!strcmp (name, "offset"))
         a->offset = strtol (value, NULL, 10);
+    else if (!strcmp (name, "park"))
+        a->park = strtol (value, NULL, 10);
     return rc;
 }
 

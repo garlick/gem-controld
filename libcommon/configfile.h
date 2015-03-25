@@ -10,6 +10,7 @@ typedef struct {
     double slow;
     double fast;
     int offset;
+    int park;
 } opt_axis_t;
 
 typedef struct {

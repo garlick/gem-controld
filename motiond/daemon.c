@@ -287,14 +287,17 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             rc = 0;
             break;
         }
-        case OP_PARK: { /* FIXME: make park position configurable */
+        case OP_PARK: {
+            double x, y;
             if (!ctx->zeroed) {
                 errno = EINVAL;
                 goto done;
             }
-            if (motion_set_position (ctx->t, 0) < 0)
+            x = controller_fromarcsec (&ctx->opt.t, ctx->opt.t.park);
+            y = controller_fromarcsec (&ctx->opt.d, ctx->opt.d.park);
+            if (motion_set_position (ctx->t, x) < 0)
                 goto done;
-            if (motion_set_position (ctx->d, 0) < 0)
+            if (motion_set_position (ctx->d, y) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
