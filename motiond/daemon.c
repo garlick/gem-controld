@@ -22,6 +22,13 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
+/* Note: in this module, (t,d) refers to raw telescope postion in
+ * arcseconds.  Origin is (0,324000), roughly (LHA,DEC) = (0,+90),
+ * telescope on west side of pier.
+ *
+ * (x,y) refers to telescope position in whole steps.  Origin (0,0).
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -53,7 +60,7 @@ char *prog = "";
 typedef struct {
     opt_t opt;
     hpad_t hpad;
-    motion_t ra, dec;
+    motion_t t, d;
     zsock_t *zreq;
     ev_zmq req_watcher;
     bool stopped;
@@ -69,9 +76,9 @@ int init_stopped (ctx_t *ctx);
 
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
-int controller_velocity (opt_axis_t *axis, double arcsec_persec);
-double controller_position (opt_axis_t *axis, double arcsec);
-double arcsec_fromcontroller (opt_axis_t *axis, double steps);
+int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
+double controller_fromarcsec (opt_axis_t *axis, double arcsec);
+double controller_toarcsec (opt_axis_t *axis, double steps);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -138,8 +145,8 @@ int main (int argc, char *argv[])
     int flags = 0;
     if (ctx.opt.debug)
         flags |= MOTION_DEBUG;
-    ctx.ra = init_axis (&ctx.opt.ra, "RA", flags);
-    ctx.dec = init_axis (&ctx.opt.dec, "DEC", flags);
+    ctx.t = init_axis (&ctx.opt.t, "t", flags);
+    ctx.d = init_axis (&ctx.opt.d, "d", flags);
     if (init_origin (&ctx) < 0)
         err_exit ("init_origin");
     if (init_stopped (&ctx) < 0)
@@ -166,10 +173,10 @@ int main (int argc, char *argv[])
     hpad_stop (loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
 
-    if (ctx.dec)
-        motion_fini (ctx.dec); 
-    if (ctx.ra)
-        motion_fini (ctx.ra); 
+    if (ctx.d)
+        motion_fini (ctx.d); 
+    if (ctx.t)
+        motion_fini (ctx.t); 
 
     zsock_destroy (&ctx.zreq);
 
@@ -198,24 +205,24 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 errno = EINVAL;
                 goto done;
             }
-            double ra, dec;
-            if (motion_get_position (ctx->ra, &ra) < 0)
+            double x, y;
+            if (motion_get_position (ctx->t, &x) < 0)
                 goto done;
-            if (motion_get_position (ctx->dec, &dec) < 0)
+            if (motion_get_position (ctx->d, &y) < 0)
                 goto done;
-            double x = arcsec_fromcontroller (&ctx->opt.ra, ra);
-            double y = arcsec_fromcontroller (&ctx->opt.dec, dec);
+            double t = controller_toarcsec (&ctx->opt.t, x);
+            double d = controller_toarcsec (&ctx->opt.d, y);
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
-            if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
+            if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
                 goto done;
-            if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
+            if (gmsg_set_arg2 (g, (int32_t)(1E2*d)) < 0)
                 goto done;
             rc = 0;
             break;
         }
         case OP_STOP: {
-            if (motion_stop (ctx->ra) < 0 || motion_stop (ctx->dec) < 0)
+            if (motion_stop (ctx->t) < 0 || motion_stop (ctx->d) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -225,25 +232,25 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         }
         case OP_TRACK: {
             uint32_t flags;
-            int y = 0;
-            int x = controller_velocity (&ctx->opt.ra, sidereal_velocity);
+            int vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            int vy = 0;
             if (gmsg_get_flags (g, &flags) < 0)
                 goto done;
             if ((flags & FLAG_ARG1)) {
                 int32_t arg;
                 if (gmsg_get_arg1 (g, &arg) < 0)
                     goto done;
-                x = controller_velocity (&ctx->opt.ra, 1E-2*arg);
+                vx = controller_vfromarcsec (&ctx->opt.t, 1E-2*arg);
             }
             if ((flags & FLAG_ARG2)) {
                 int32_t arg;
                 if (gmsg_get_arg2 (g, &arg) < 0)
                     goto done;
-                y = controller_velocity (&ctx->opt.dec, 1E-2*arg);
+                vy = controller_vfromarcsec (&ctx->opt.d, 1E-2*arg);
             }
-            if (motion_set_velocity (ctx->ra, x) < 0)
+            if (motion_set_velocity (ctx->t, vx) < 0)
                 goto done;
-            if (motion_set_velocity (ctx->dec, y) < 0)
+            if (motion_set_velocity (ctx->d, vy) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -268,11 +275,11 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             if (gmsg_get_arg2 (g, &arg2) < 0)
                 goto done;
-            x = controller_position (&ctx->opt.ra, 1E-2*arg1);
-            y = controller_position (&ctx->opt.dec, 1E-2*arg2);
-            if (motion_set_position (ctx->ra, x) < 0)
+            x = controller_fromarcsec (&ctx->opt.t, 1E-2*arg1);
+            y = controller_fromarcsec (&ctx->opt.d, 1E-2*arg2);
+            if (motion_set_position (ctx->t, x) < 0)
                 goto done;
-            if (motion_set_position (ctx->dec, y) < 0)
+            if (motion_set_position (ctx->d, y) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -285,9 +292,9 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 errno = EINVAL;
                 goto done;
             }
-            if (motion_set_position (ctx->ra, 0) < 0)
+            if (motion_set_position (ctx->t, 0) < 0)
                 goto done;
-            if (motion_set_position (ctx->dec, 0) < 0)
+            if (motion_set_position (ctx->d, 0) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -314,35 +321,35 @@ done_noreply:
 
 int init_stopped (ctx_t *ctx)
 {
-    uint8_t x, y;
-    if (motion_get_status (ctx->ra, &x) < 0)
+    uint8_t a, b;
+    if (motion_get_status (ctx->t, &a) < 0)
         return -1;
-    if (motion_get_status (ctx->dec, &y) < 0)
+    if (motion_get_status (ctx->d, &b) < 0)
         return -1;
-    ctx->stopped = (x == 0 && y == 0);
+    ctx->stopped = (a == 0 && b == 0);
     return 0;
 }
 
 int init_origin (ctx_t *ctx)
 {
-    uint8_t x, y;
-    if (motion_get_port (ctx->ra, &x) < 0)
+    uint8_t a, b;
+    if (motion_get_port (ctx->t, &a) < 0)
         return -1;
-    if (motion_get_port (ctx->dec, &y) < 0)
+    if (motion_get_port (ctx->d, &b) < 0)
         return -1;
-    ctx->zeroed = ((x & GREEN_LED_MASK) != 0 && (y & GREEN_LED_MASK) != 0);
+    ctx->zeroed = ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
     return 0;
 }
 
 int set_origin (ctx_t *ctx)
 {
-    if (motion_set_origin (ctx->ra) < 0)
+    if (motion_set_origin (ctx->t) < 0)
         return -1;
-    if (motion_set_origin (ctx->dec) < 0)
+    if (motion_set_origin (ctx->d) < 0)
         return -1;
-    if (motion_set_port (ctx->ra, GREEN_LED_MASK) < 0)
+    if (motion_set_port (ctx->t, GREEN_LED_MASK) < 0)
         return -1;
-    if (motion_set_port (ctx->dec, GREEN_LED_MASK) < 0)
+    if (motion_set_port (ctx->d, GREEN_LED_MASK) < 0)
         return -1;
     ctx->stopped = true;
     ctx->zeroed = true;
@@ -384,45 +391,41 @@ void hpad_cb (hpad_t h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            int x = 0;
+            int vx = 0;
             if (!ctx->stopped && ctx->zeroed)
-                x = controller_velocity (&ctx->opt.ra, sidereal_velocity);
-            if (motion_set_velocity (ctx->ra, x) < 0)
-                err_exit ("ra: set velocity");
-            if (motion_set_velocity (ctx->dec, 0) < 0)
-                err_exit ("dec: set velocity");
+                vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            if (motion_set_velocity (ctx->t, vx) < 0)
+                err_exit ("t: set velocity");
+            if (motion_set_velocity (ctx->d, 0) < 0)
+                err_exit ("d: set velocity");
             break;
         }
         case HPAD_KEY_NORTH: {
-            int v = controller_velocity (&ctx->opt.dec,
-                                                    fast ? ctx->opt.dec.fast
-                                                         : ctx->opt.dec.slow);
-            if (motion_set_velocity (ctx->dec, v) < 0)
-                err_exit ("dec: set velocity");
+            int v = controller_vfromarcsec (&ctx->opt.d, fast ? ctx->opt.d.fast
+                                                           : ctx->opt.d.slow);
+            if (motion_set_velocity (ctx->d, v) < 0)
+                err_exit ("d: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: {
-            int v = controller_velocity (&ctx->opt.dec,
-                                                    fast ? ctx->opt.dec.fast
-                                                         : ctx->opt.dec.slow);
-            if (motion_set_velocity (ctx->dec, -1*v) < 0)
-                err_exit ("dec: set velocity");
+            int v = controller_vfromarcsec (&ctx->opt.d, fast ? ctx->opt.d.fast
+                                                           : ctx->opt.d.slow);
+            if (motion_set_velocity (ctx->d, -1*v) < 0)
+                err_exit ("d: set velocity");
             break;
         }
         case HPAD_KEY_WEST: {
-            int v = controller_velocity (&ctx->opt.ra,
-                                                    fast ? ctx->opt.ra.fast
-                                                         : ctx->opt.ra.slow);
-            if (motion_set_velocity (ctx->ra, v) < 0)
-                err_exit ("ra: set velocity");
+            int v = controller_vfromarcsec (&ctx->opt.t, fast ? ctx->opt.t.fast
+                                                           : ctx->opt.t.slow);
+            if (motion_set_velocity (ctx->t, v) < 0)
+                err_exit ("t: set velocity");
             break;
         }
         case HPAD_KEY_EAST: {
-            int v = controller_velocity (&ctx->opt.ra,
-                                                    fast ? ctx->opt.ra.fast
-                                                         : ctx->opt.ra.slow);
-            if (motion_set_velocity (ctx->ra, -1*v) < 0)
-                err_exit ("ra: set velocity");
+            int v = controller_vfromarcsec (&ctx->opt.t, fast ? ctx->opt.t.fast
+                                                           : ctx->opt.t.slow);
+            if (motion_set_velocity (ctx->t, -1*v) < 0)
+                err_exit ("t: set velocity");
             break;
         } 
         case HPAD_KEY_M1: /* zero */
@@ -437,24 +440,24 @@ void hpad_cb (hpad_t h, void *arg)
 
 /* Return position in arcsec from controller steps
  */
-double arcsec_fromcontroller (opt_axis_t *axis, double steps)
+double controller_toarcsec (opt_axis_t *axis, double steps)
 {
-    return steps * (360.0*60*60) / axis->steps;
+    return steps * (360.0*60*60) / axis->steps + axis->offset;
 }
 
 /* Calculate position in steps for motion controller from arcsec.
  */
-double controller_position (opt_axis_t *axis, double arcsec)
+double controller_fromarcsec (opt_axis_t *axis, double arcsec)
 {
-    return arcsec * axis->steps / (360.0*60*60);
+    return (arcsec - axis->offset) * axis->steps / (360.0*60*60);
 }
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
  * Take into account controller velocity scaling in 'auto' mode.
  */
-int controller_velocity (opt_axis_t *axis, double arcsec_persec)
+int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec)
 {
-    double steps_persec = controller_position (axis, arcsec_persec);
+    double steps_persec = arcsec_persec * axis->steps / (360.0*60*60);
 
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);

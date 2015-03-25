@@ -80,9 +80,9 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: gem [OPTIONS] position    (arcsec)\n"
-"                     goto x y    (arcsec)\n"
-"                     track [x y] (arcsec/sec)\n"
+"Usage: gem [OPTIONS] position      (arcsec)\n"
+"                     goto t d      (arcsec)\n"
+"                     track [vt vd] (arcsec/sec)\n"
 "                     stop\n"
 "                     zero\n"
 "                     park\n"
@@ -153,7 +153,7 @@ int main (int argc, char *argv[])
 
 void op_position (ctx_t *ctx, int ac, char **av)
 {
-    int32_t x, y;
+    int32_t arg1, arg2;
     gmsg_t g = NULL;
 
     if (ac != 0) {
@@ -173,12 +173,12 @@ void op_position (ctx_t *ctx, int ac, char **av)
         err ("gmsg_recv");
         goto done;
     }
-    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &x) < 0
-                           || gmsg_get_arg2 (g, &y) < 0) {
+    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
+                           || gmsg_get_arg2 (g, &arg2) < 0) {
         err ("server error");
         goto done;
     }
-    msg ("position: %.2f, %.2f", 1E-2*x, 1E-2*y);
+    msg ("(%.2f,%.2f)", 1E-2*arg1, 1E-2*arg2);
 done:
     gmsg_destroy (&g);
 }
@@ -215,7 +215,7 @@ done:
 
 void op_track (ctx_t *ctx, int ac, char **av)
 {
-    double x, y;
+    double vt, vd;
     gmsg_t g = NULL;
 
     if (ac > 2) {
@@ -227,11 +227,11 @@ void op_track (ctx_t *ctx, int ac, char **av)
         goto done;;
     }
     if (ac == 2) {
-        x = strtod (av[0], NULL);
-        y = strtod (av[1], NULL);
-        if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
+        vt = strtod (av[0], NULL);
+        vd = strtod (av[1], NULL);
+        if (gmsg_set_arg1 (g, (int32_t)(1E2*vt)) < 0)
             err ("gmsg_set_arg1");
-        if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
+        if (gmsg_set_arg2 (g, (int32_t)(1E2*vd)) < 0)
             err ("gmsg_set_arg2");
     }
     if (gmsg_send (ctx->zreq, g) < 0) {
@@ -284,7 +284,7 @@ done:
 
 void op_goto (ctx_t *ctx, int ac, char **av)
 {
-    double x, y;
+    double t, d;
     gmsg_t g = NULL;
 
     if (ac != 2) {
@@ -295,11 +295,11 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         err ("gmsg_create");
         goto done;;
     }
-    x = strtod (av[0], NULL);
-    y = strtod (av[1], NULL);
-    if (gmsg_set_arg1 (g, (int32_t)(1E2*x)) < 0)
+    t = strtod (av[0], NULL);
+    d = strtod (av[1], NULL);
+    if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
         err ("gmsg_set_arg1");
-    if (gmsg_set_arg2 (g, (int32_t)(1E2*y)) < 0)
+    if (gmsg_set_arg2 (g, (int32_t)(1E2*d)) < 0)
         err ("gmsg_set_arg2");
     if (gmsg_send (ctx->zreq, g) < 0) {
         err ("gmsg_send");
@@ -314,7 +314,7 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         err ("server error");
         goto done;
     }
-    msg ("slewing to %.2f, %.2f", x, y);
+    msg ("slewing to (%.2f,%.2f)", t, d);
 done:
     gmsg_destroy (&g);
 }

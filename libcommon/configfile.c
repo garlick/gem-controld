@@ -71,6 +71,8 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->decel = strtoul (value, NULL, 10);
     else if (!strcmp (name, "steps"))
         a->steps = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "offset"))
+        a->offset = strtol (value, NULL, 10);
     return rc;
 }
 
@@ -87,10 +89,10 @@ static int config_cb (void *user, const char *section, const char *name,
             else if (!strcmp (value, "no"))
                 opt->debug = false;
         }
-    } else if (!strcmp (section, "ra"))
-        rc = config_axis (&opt->ra, name, value);
-    else if (!strcmp (section, "dec"))
-        rc = config_axis (&opt->dec, name, value);
+    } else if (!strcmp (section, "t_axis"))
+        rc = config_axis (&opt->t, name, value);
+    else if (!strcmp (section, "d_axis"))
+        rc = config_axis (&opt->d, name, value);
     else if (!strcmp (section, "hpad")) {
         if (!strcmp (name, "gpio")) {
             if (opt->hpad_gpio)

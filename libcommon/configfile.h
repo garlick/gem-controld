@@ -9,11 +9,12 @@ typedef struct {
     int steps;
     double slow;
     double fast;
+    int offset;
 } opt_axis_t;
 
 typedef struct {
-    opt_axis_t ra;
-    opt_axis_t dec;
+    opt_axis_t t;
+    opt_axis_t d;
     bool debug;
     bool no_motion;
     bool soft_init;
