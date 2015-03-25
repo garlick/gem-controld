@@ -266,7 +266,8 @@ static int mexamine (motion_t m)
     return 0;
 }
 
-motion_t motion_init (const char *devname, const char *name, int flags)
+motion_t motion_init (const char *devname, const char *name, int flags,
+                      bool *coldstart)
 {
     motion_t m;
     int saved_errno;
@@ -280,20 +281,16 @@ motion_t motion_init (const char *devname, const char *name, int flags)
     m->fd = -1;
     if (mopen (m) < 0)
         goto error;
-    if (mhello (m, NULL) < 0)
-        goto error;
     if (m->flags & MOTION_RESET) {
         if (mreset (m) < 0)
             goto error;
-        if (mhello (m, NULL) < 0)
-            goto error;
     }
+    if (mhello (m, coldstart) < 0)
+        goto error;
     if (m->flags & MOTION_DEBUG) {
         if (mexamine (m) < 0)
             goto error;
     }
-    if (mcmd (m, "@") < 0)          /* stop any motion */
-        goto error;
     if (mping (m, 2) < 0)
         goto error;
     return m;

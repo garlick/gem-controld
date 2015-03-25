@@ -63,15 +63,15 @@ typedef struct {
 void hpad_cb (hpad_t h, void *arg);
 
 motion_t init_axis (opt_axis_t *a, const char *name, int flags);
+int set_origin (ctx_t *ctx);
+int init_origin (ctx_t *ctx);
+int init_stopped (ctx_t *ctx);
 
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 
 int controller_velocity (opt_axis_t *axis, double arcsec_persec);
 double controller_position (opt_axis_t *axis, double arcsec);
 double arcsec_fromcontroller (opt_axis_t *axis, double steps);
-
-int set_origin (ctx_t *ctx);
-int init_origin (ctx_t *ctx);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -142,6 +142,8 @@ int main (int argc, char *argv[])
     ctx.dec = init_axis (&ctx.opt.dec, "DEC", flags);
     if (init_origin (&ctx) < 0)
         err_exit ("init_origin");
+    if (init_stopped (&ctx) < 0)
+        err_exit ("init_stopped");
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
@@ -310,6 +312,17 @@ done_noreply:
     return;
 }
 
+int init_stopped (ctx_t *ctx)
+{
+    uint8_t x, y;
+    if (motion_get_status (ctx->ra, &x) < 0)
+        return -1;
+    if (motion_get_status (ctx->dec, &y) < 0)
+        return -1;
+    ctx->stopped = (x == 0 && y == 0);
+    return 0;
+}
+
 int init_origin (ctx_t *ctx)
 {
     uint8_t x, y;
@@ -339,18 +352,22 @@ int set_origin (ctx_t *ctx)
 motion_t init_axis (opt_axis_t *a, const char *name, int flags)
 {
     motion_t m;
+    bool coldstart;
+
     if (!a->device)
         msg_exit ("%s: no serial device configured", name);
-    if (!(m = motion_init (a->device, name, flags)))
+    if (!(m = motion_init (a->device, name, flags, &coldstart)))
         err_exit ("%s: init %s", name, a->device);
-    if (motion_set_current (m, a->ihold, a->irun) < 0)
-        err_exit ("%s: set current", name);
-    if (motion_set_mode (m, a->mode) < 0)
-        err_exit ("%s: set mode", name);
-    if (motion_set_resolution (m, a->resolution) < 0)
-        err_exit ("%s: set resolution", name);
-    if (motion_set_acceleration (m, a->accel, a->decel) < 0)
-        err_exit ("%s: set acceleration", name);
+    if (coldstart) {
+        if (motion_set_current (m, a->ihold, a->irun) < 0)
+            err_exit ("%s: set current", name);
+        if (motion_set_mode (m, a->mode) < 0)
+            err_exit ("%s: set mode", name);
+        if (motion_set_resolution (m, a->resolution) < 0)
+            err_exit ("%s: set resolution", name);
+        if (motion_set_acceleration (m, a->accel, a->decel) < 0)
+            err_exit ("%s: set acceleration", name);
+    }
     return m;
 }
 

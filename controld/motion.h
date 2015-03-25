@@ -9,7 +9,8 @@ typedef struct motion_struct *motion_t;
 
 /* Initialize communications with indexer on 'devname'.
  */
-motion_t motion_init (const char *devname, const char *name, int flags);
+motion_t motion_init (const char *devname, const char *name, int flags,
+                      bool *coldstart);
 
 /* Disconnect from indexer, stopping motion if any.
  */
