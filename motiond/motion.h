@@ -58,8 +58,12 @@ int motion_set_index (motion_t m, double offset);
 int motion_stop (motion_t m);
 
 /* Read moving status.
- * If status is nonzero, device is in motion.
  */
+#define MOTION_STATUS_MOVING    0x01
+#define MOTION_STATUS_TRACKING  0x02
+#define MOTION_STATUS_HOMING    0x08
+#define MOTION_STATUS_HUNTING   0x10
+#define MOTION_STATUS_RAMPING   0x20
 int motion_get_status (motion_t m, uint8_t *status);
 
 /* Set internal position counter to zero.

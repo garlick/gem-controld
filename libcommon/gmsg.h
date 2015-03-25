@@ -42,9 +42,15 @@ enum {
 /* Flags
  */
 enum {
-    FLAG_ERROR = 1,     /* request failed (see arg1 for errnum) */
-    FLAG_ARG1 = 2,      /* arg1 is valid */
-    FLAG_ARG2 = 4,      /* arg2 is valid */
+    FLAG_ERROR      = 0x0001,       /* request failed (see arg1 for errnum) */
+    FLAG_ARG1       = 0x0002,       /* arg1 is valid */
+    FLAG_ARG2       = 0x0004,       /* arg2 is valid */
+
+    FLAG_T_TRACKING   = 0x0100,     /* t axis moving at constant velocity */
+    FLAG_T_MOVING     = 0x0200,     /* t axis goto/park in progress */
+
+    FLAG_D_TRACKING   = 0x0400,     /* d axis moving at constant velocity */
+    FLAG_D_MOVING     = 0x0800,     /* d axis goto/park in progress */
 };
 
 /*

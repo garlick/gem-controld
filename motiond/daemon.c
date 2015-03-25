@@ -206,13 +206,27 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 goto done;
             }
             double x, y;
+            uint8_t a, b;
+            uint32_t flags = 0;
             if (motion_get_position (ctx->t, &x) < 0)
                 goto done;
             if (motion_get_position (ctx->d, &y) < 0)
                 goto done;
             double t = controller_toarcsec (&ctx->opt.t, x);
             double d = controller_toarcsec (&ctx->opt.d, y);
-            if (gmsg_set_flags (g, 0) < 0)
+            if (motion_get_status (ctx->t, &a) < 0)
+                goto done;
+            if (motion_get_status (ctx->d, &b) < 0)
+                goto done;
+            if ((a & MOTION_STATUS_TRACKING))
+                flags |= FLAG_T_TRACKING; 
+            if ((a & MOTION_STATUS_MOVING))
+                flags |= FLAG_T_MOVING; 
+            if ((b & MOTION_STATUS_TRACKING))
+                flags |= FLAG_D_TRACKING; 
+            if ((b & MOTION_STATUS_MOVING))
+                flags |= FLAG_D_MOVING; 
+            if (gmsg_set_flags (g, flags) < 0)
                 goto done;
             if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
                 goto done;

@@ -154,6 +154,7 @@ int main (int argc, char *argv[])
 void op_position (ctx_t *ctx, int ac, char **av)
 {
     int32_t arg1, arg2;
+    uint32_t flags;
     gmsg_t g = NULL;
 
     if (ac != 0) {
@@ -174,11 +175,16 @@ void op_position (ctx_t *ctx, int ac, char **av)
         goto done;
     }
     if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
-                           || gmsg_get_arg2 (g, &arg2) < 0) {
+                           || gmsg_get_arg2 (g, &arg2) < 0
+                           || gmsg_get_flags (g, &flags) < 0) {
         err ("server error");
         goto done;
     }
-    msg ("(%.2f,%.2f)", 1E-2*arg1, 1E-2*arg2);
+    msg ("(%.2f,%.2f) tracking=%s%s moving=%s%s", 1E-2*arg1, 1E-2*arg2,
+        (flags & FLAG_T_TRACKING) ? "t" : "",
+        (flags & FLAG_D_TRACKING) ? "d" : "",
+        (flags & FLAG_T_MOVING)   ? "t" : "",
+        (flags & FLAG_D_MOVING)   ? "d" : "");
 done:
     gmsg_destroy (&g);
 }
