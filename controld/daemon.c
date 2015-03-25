@@ -70,13 +70,14 @@ int controller_velocity (opt_axis_t *axis, double arcsec_persec);
 double controller_position (opt_axis_t *axis, double arcsec);
 double arcsec_fromcontroller (opt_axis_t *axis, double steps);
 
-#define OPTIONS "+c:hdns"
+int set_origin (ctx_t *ctx);
+int init_origin (ctx_t *ctx);
+
+#define OPTIONS "+c:hd"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug",                no_argument,       0, 'd'},
-    {"no-motion",            no_argument,       0, 'n'},
-    {"soft-init",            no_argument,       0, 's'},
     {0, 0, 0, 0},
 };
 
@@ -86,8 +87,6 @@ static void usage (void)
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE         set path to config file\n"
 "    -d,--debug               emit verbose debugging to stderr\n"
-"    -n,--no-motion           do not attempt to talk to motion controllers\n"
-"    -s,--soft-init           do not initialize/zero motion controllers\n"
 );
     exit (1);
 }
@@ -121,13 +120,6 @@ int main (int argc, char *argv[])
             case 'd':   /* --debug */
                 ctx.opt.debug = true;
                 break;
-            case 'n':   /* --no-motion */
-                ctx.opt.no_motion = true;
-                ctx.zeroed = true;
-                break;
-            case 's':   /* --soft-init */
-                ctx.opt.soft_init = true;
-                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -143,15 +135,13 @@ int main (int argc, char *argv[])
     if (!(loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    if (!ctx.opt.no_motion) {
-        int flags = 0;
-        if (ctx.opt.debug)
-            flags |= MOTION_DEBUG;
-        if (ctx.opt.soft_init)
-            flags |= MOTION_SOFTINIT;
-        ctx.ra = init_axis (&ctx.opt.ra, "RA", flags);
-        ctx.dec = init_axis (&ctx.opt.dec, "DEC", flags);
-    }
+    int flags = 0;
+    if (ctx.opt.debug)
+        flags |= MOTION_DEBUG;
+    ctx.ra = init_axis (&ctx.opt.ra, "RA", flags);
+    ctx.dec = init_axis (&ctx.opt.dec, "DEC", flags);
+    if (init_origin (&ctx) < 0)
+        err_exit ("init_origin");
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
@@ -267,14 +257,8 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_ORIGIN: {
-            if (motion_set_origin (ctx->ra) < 0)
+            if (set_origin (ctx) < 0)
                 goto done;
-            if (motion_set_origin (ctx->dec) < 0)
-                goto done;
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            ctx->stopped = true;
-            ctx->zeroed = true;
             rc = 0;
             break;
         }
@@ -333,6 +317,32 @@ done_noreply:
     return;
 }
 
+int init_origin (ctx_t *ctx)
+{
+    uint8_t x, y;
+    if (motion_get_port (ctx->ra, &x) < 0)
+        return -1;
+    if (motion_get_port (ctx->dec, &y) < 0)
+        return -1;
+    ctx->zeroed = ((x & GREEN_LED_MASK) != 0 && (y & GREEN_LED_MASK) != 0);
+    return 0;
+}
+
+int set_origin (ctx_t *ctx)
+{
+    if (motion_set_origin (ctx->ra) < 0)
+        return -1;
+    if (motion_set_origin (ctx->dec) < 0)
+        return -1;
+    if (motion_set_port (ctx->ra, GREEN_LED_MASK) < 0)
+        return -1;
+    if (motion_set_port (ctx->dec, GREEN_LED_MASK) < 0)
+        return -1;
+    ctx->stopped = true;
+    ctx->zeroed = true;
+    return 0;
+}
+
 motion_t init_axis (opt_axis_t *a, const char *name, int flags)
 {
     motion_t m;
@@ -360,8 +370,6 @@ void hpad_cb (hpad_t h, void *arg)
         err_exit ("hpad");
     if (ctx->opt.debug)
         msg ("hpad: %d", val);
-    if (ctx->opt.no_motion)
-        return;
 
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
@@ -408,12 +416,8 @@ void hpad_cb (hpad_t h, void *arg)
             break;
         } 
         case HPAD_KEY_M1: /* zero */
-            if (motion_set_origin (ctx->ra) < 0)
-                err_exit ("ra: set origin");
-            if (motion_set_origin (ctx->dec) < 0)
-                err_exit ("dec: set origin");
-            ctx->stopped = true;
-            ctx->zeroed = true;
+            if (set_origin (ctx) < 0)
+                err_exit ("set origin");
             break;
         case HPAD_KEY_M2: /* toggle stop */
             ctx->stopped = !ctx->stopped;

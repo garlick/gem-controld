@@ -215,12 +215,61 @@ static int mopen (motion_t m)
     return tcsetattr(m->fd, TCSANOW, &tio);
 }
 
+/* Cold start: send " \r", read 2 banner lines and "#".
+ * Warm start: send " \r", read " #".
+ */
+static int mhello (motion_t m, bool *coldstart)
+{
+    char buf[max_cmdline];
+    int i;
+    bool warm = false;
+
+    if (mputs (m, " \r") < 0)
+        return -1;
+    for (i = 0; i < 3; i++) {
+        if (!mgets (m, buf, sizeof (buf)))
+            return -1;
+        if (!strcmp (buf, " #")) {
+            warm = true;
+            break;
+        }
+    }
+    if (coldstart)
+        *coldstart = !warm;
+    return 0;
+}
+
+/* Send ctrl-C to reset device, then delay while it comes out of reset.
+ */
+static int mreset (motion_t m)
+{
+    if (mputs (m, "\003") < 0)
+        return -1;
+    mdelay (m, 200);
+    return 0;
+}
+
+/* Examine configuration parameters (via debug output).
+ * Assume two lines are returned (three if encoder option installed).
+ */
+static int mexamine (motion_t m)
+{
+    char buf[max_cmdline];
+    int i;
+
+    if (mprintf (m, "X\r") < 0)
+        return -1;
+    for (i = 0; i < 2; i++) {
+        if (!mgets (m, buf, sizeof (buf)))
+            return -1;
+    }
+    return 0;
+}
+
 motion_t motion_init (const char *devname, const char *name, int flags)
 {
     motion_t m;
     int saved_errno;
-    char buf[max_cmdline];
-    int i;
 
     if (!(m = malloc (sizeof (*m))) || !(m->devname = strdup (devname))
                                     || !(m->name = strdup (name))) {
@@ -231,36 +280,20 @@ motion_t motion_init (const char *devname, const char *name, int flags)
     m->fd = -1;
     if (mopen (m) < 0)
         goto error;
-
-    /* Preserve the operating state (avoid setting origin)
-     */
-    if (m->flags & MOTION_SOFTINIT)
-        goto done;
-
-    /* Opening dialog
-     */
-    if (mputs (m, "\003") < 0)      /* send ctrl-C to reset */
+    if (mhello (m, NULL) < 0)
         goto error;
-    mdelay (m, 200);                /* wait for device to come out of reset */
-    if (mputs (m, " ") < 0)         /* send space to initiate comms */
-        goto error;
-    for (i = 0; i < 2; i++) {       /* eat 2 lines of init output */
-        if (!mgets (m, buf, sizeof (buf)))
+    if (m->flags & MOTION_RESET) {
+        if (mreset (m) < 0)
+            goto error;
+        if (mhello (m, NULL) < 0)
             goto error;
     }
     if (m->flags & MOTION_DEBUG) {
-        if (mprintf (m, "X\r") < 0) /* eXamine parameters */
+        if (mexamine (m) < 0)
             goto error;
-        for (i = 0; i < 2; i++) {   /* expect 2 lines (no encoder/auto-pos) */
-            if (!mgets (m, buf, sizeof (buf)))
-                goto error;
-        }
     }
-    if (mcmd (m, "A%d", 0x8) < 0)   /* turn off green LED on OUTPUT-1 */
+    if (mcmd (m, "@") < 0)          /* stop any motion */
         goto error;
-    if (mcmd (m, "M0") < 0)         /* stop any motion */
-        goto error;
-done:
     if (mping (m, 2) < 0)
         goto error;
     return m;
@@ -392,6 +425,30 @@ int motion_set_origin (motion_t m)
 int motion_abort (motion_t m)
 {
     return mcmd (m, "@");
+}
+
+int motion_set_port (motion_t m, uint8_t val)
+{
+    if (val & 0b11000111) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "A%d", val);
+}
+
+int motion_get_port (motion_t m, uint8_t *val)
+{
+    char buf[max_cmdline];
+    int v;
+
+    if (mprintf (m, "A129\r") < 0)
+        return -1;
+    if (!mgets (m, buf, sizeof (buf)))
+        return -1;
+    if (sscanf (buf, "A129 %d", &v) != 1)
+        return -1;
+    *val = v;
+    return 0;
 }
 
 /*

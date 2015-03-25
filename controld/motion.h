@@ -1,18 +1,13 @@
 #include <stdint.h>
 
-/* These interfaces presume that config values are set with minicom
- * and stored in nvram.
- */
 enum {
-    MOTION_DEBUG = 0x01,
-    MOTION_SOFTINIT = 0x02,
+    MOTION_DEBUG = 0x01,    /* send telemetry to stderr */
+    MOTION_RESET = 0x02,    /* perform factory reset */
 };
 
 typedef struct motion_struct *motion_t;
 
-
-/* Connect to indexer on 'devname' and conduct a little dialog.
- * 'flags' may be 0 or MOTION_DEBUG.
+/* Initialize communications with indexer on 'devname'.
  */
 motion_t motion_init (const char *devname, const char *name, int flags);
 
@@ -69,6 +64,21 @@ int motion_get_status (motion_t m, uint8_t *status);
 /* Set internal position counter to zero.
  */
 int motion_set_origin (motion_t m);
+
+/* Read 6-bit GPIO port.  Bits are:
+ *  0 in-1
+ *  1 in-2
+ *  2 in-3
+ *  3 out-1   (green LED: 0=on, 1=off)
+ *  4 out-2
+ *  5 out-3
+ */
+#define GREEN_LED_MASK  (8)
+int motion_get_port (motion_t m, uint8_t *val);
+
+/* Write 6-bit GPIO port.
+ */
+int motion_set_port (motion_t m, uint8_t val);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
