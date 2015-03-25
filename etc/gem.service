@@ -1,8 +1,8 @@
 [Unit]
-Description=GEM Telescope Control Daemon
+Description=GEM Motion Control Daemon
 
 [Service]
-ExecStart=/usr/local/sbin/gem-controld
+ExecStart=/usr/local/sbin/gem-motiond
 Restart=always
 
 [Install]
