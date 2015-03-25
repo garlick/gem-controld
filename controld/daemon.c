@@ -213,15 +213,8 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_STOP: {
-#if 0
-            if (motion_set_velocity (ctx->ra, 0) < 0)
+            if (motion_stop (ctx->ra) < 0 || motion_stop (ctx->dec) < 0)
                 goto done;
-            if (motion_set_velocity (ctx->dec, 0) < 0)
-                goto done;
-#else
-            if (motion_abort (ctx->ra) < 0 || motion_abort (ctx->dec) < 0)
-                goto done;
-#endif
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
             ctx->stopped = true;

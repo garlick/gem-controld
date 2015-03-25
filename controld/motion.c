@@ -422,7 +422,7 @@ int motion_set_origin (motion_t m)
     return mcmd (m, "O");
 }
 
-int motion_abort (motion_t m)
+int motion_stop (motion_t m)
 {
     return mcmd (m, "@");
 }

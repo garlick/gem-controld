@@ -52,9 +52,9 @@ int motion_set_position (motion_t m, double position);
  */
 int motion_set_index (motion_t m, double offset);
 
-/* Abort any motion in progress.
+/* Execute a "soft stop" (with deceleration) on all motion.
  */
-int motion_abort (motion_t m);
+int motion_stop (motion_t m);
 
 /* Read moving status.
  * If status is nonzero, device is in motion.
