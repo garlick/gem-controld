@@ -53,7 +53,7 @@
 #include "motion.h"
 #include "hpad.h"
 
-const double sidereal_velocity = -15.0417; /* arcsec/sec */
+const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
 char *prog = "";
 
