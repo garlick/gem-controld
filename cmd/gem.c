@@ -60,6 +60,7 @@ void op_track (ctx_t *ctx, int ac, char **av);
 void op_zero (ctx_t *ctx, int ac, char **av);
 void op_goto (ctx_t *ctx, int ac, char **av);
 void op_park (ctx_t *ctx, int ac, char **av);
+void op_plot (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
@@ -68,6 +69,7 @@ static op_t ops[] = {
     { "zero",     op_zero},
     { "goto",     op_goto},
     { "park",     op_park},
+    { "plot",     op_plot},
 };
 
 #define OPTIONS "+c:h"
@@ -86,6 +88,7 @@ static void usage (void)
 "                     stop\n"
 "                     zero\n"
 "                     park\n"
+"                     plot\n"
 "OPTIONS:\n"
 "    -c,--config FILE         set path to config file\n"
 );
@@ -353,6 +356,75 @@ void op_park (ctx_t *ctx, int ac, char **av)
     }
     msg ("parking");
 done:
+    gmsg_destroy (&g);
+}
+
+void op_plot (ctx_t *ctx, int ac, char **av)
+{
+    int32_t arg1, arg2;
+    uint32_t flags;
+    gmsg_t g = NULL;
+    FILE *p = NULL;
+    FILE *gp = NULL;
+
+    if (ac != 0) {
+        msg ("position takes no arguments");
+        goto done;
+    }
+    if (!(p = popen ("gnuplot", "w"))) {
+        err ("popen gnuplot");
+        goto done;
+    }
+    if (!(gp = fopen (POSITION_GP, "r"))) {
+        err ("open %s", POSITION_GP);
+        goto done;
+    }
+    char buf[128];
+    while (fgets (buf, sizeof (buf), gp)) {
+        if (fputs (buf, p) < 0) {
+            err ("write to gnuplot");
+            goto done;
+        }
+    }
+replot:
+    if (!(g = gmsg_create (OP_POSITION))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
+                           || gmsg_get_arg2 (g, &arg2) < 0
+                           || gmsg_get_flags (g, &flags) < 0) {
+        err ("server error");
+        goto done;
+    }
+    double t = 1E-2*arg1/(60*60);
+    double d = 1E-2*arg2/(60*60);
+
+    msg ("plotting (%f,%f)\n", t, d);
+
+    fprintf (p, "%f %f\n", t, d);
+    fprintf (p, "e\n");
+    fflush (p);
+    if ((flags & FLAG_D_MOVING) || (flags & FLAG_T_MOVING))
+        sleep (1);
+    else
+        sleep (10);
+    fprintf (p, "replot\n");
+    goto replot;
+done:
+    if (gp)
+        fclose (gp);
+    if (p)
+        pclose (p);
     gmsg_destroy (&g);
 }
 
