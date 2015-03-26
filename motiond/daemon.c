@@ -81,6 +81,7 @@ double controller_fromarcsec (opt_axis_t *axis, double arcsec);
 double controller_toarcsec (opt_axis_t *axis, double steps);
 
 bool safeposition (ctx_t *ctx, double t, double d);
+bool motion_inprogress (ctx_t *ctx);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -294,6 +295,10 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 errno = EINVAL;
                 goto done;
             }
+            if (motion_inprogress (ctx)) {
+                errno = EAGAIN;
+                goto done;
+            }
             x = controller_fromarcsec (&ctx->opt.t, t);
             y = controller_fromarcsec (&ctx->opt.d, d);
             if (motion_set_position (ctx->t, x) < 0)
@@ -312,6 +317,10 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             double d = ctx->opt.d.park;
             if (!ctx->zeroed || !safeposition (ctx, t, d)) {
                 errno = EINVAL;
+                goto done;
+            }
+            if (motion_inprogress (ctx)) {
+                errno = EAGAIN;
                 goto done;
             }
             x = controller_fromarcsec (&ctx->opt.t, t);
@@ -486,6 +495,16 @@ int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec)
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);
     return lrint (steps_persec);
+}
+
+bool motion_inprogress (ctx_t *ctx)
+{
+    uint8_t s;
+
+    if ((motion_get_status (ctx->t, &s) == 0 && (s & MOTION_STATUS_MOVING))
+     || (motion_get_status (ctx->d, &s) == 0 && (s & MOTION_STATUS_MOVING)))
+        return true;
+    return false;
 }
 
 bool safeposition (ctx_t *ctx, double t, double d)
