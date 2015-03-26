@@ -75,6 +75,10 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->offset = strtol (value, NULL, 10);
     else if (!strcmp (name, "park"))
         a->park = strtol (value, NULL, 10);
+    else if (!strcmp (name, "low_limit"))
+        a->low_limit = strtol (value, NULL, 10);
+    else if (!strcmp (name, "high_limit"))
+        a->high_limit = strtol (value, NULL, 10);
     return rc;
 }
 

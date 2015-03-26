@@ -11,6 +11,8 @@ typedef struct {
     double fast;
     int offset;
     int park;
+    int high_limit;
+    int low_limit;
 } opt_axis_t;
 
 typedef struct {

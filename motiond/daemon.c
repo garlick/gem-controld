@@ -80,6 +80,8 @@ int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
 double controller_fromarcsec (opt_axis_t *axis, double arcsec);
 double controller_toarcsec (opt_axis_t *axis, double steps);
 
+bool safeposition (ctx_t *ctx, double t, double d);
+
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
@@ -281,16 +283,19 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         case OP_GOTO: {
             int32_t arg1, arg2;
             double x, y;
-            if (!ctx->zeroed) {
-                errno = EINVAL;
-                goto done;
-            }
+            double t, d;
             if (gmsg_get_arg1 (g, &arg1) < 0)
                 goto done;
             if (gmsg_get_arg2 (g, &arg2) < 0)
                 goto done;
-            x = controller_fromarcsec (&ctx->opt.t, 1E-2*arg1);
-            y = controller_fromarcsec (&ctx->opt.d, 1E-2*arg2);
+            t = 1E-2*arg1;
+            d = 1E-2*arg2;
+            if (!ctx->zeroed || !safeposition (ctx, t, d)) {
+                errno = EINVAL;
+                goto done;
+            }
+            x = controller_fromarcsec (&ctx->opt.t, t);
+            y = controller_fromarcsec (&ctx->opt.d, d);
             if (motion_set_position (ctx->t, x) < 0)
                 goto done;
             if (motion_set_position (ctx->d, y) < 0)
@@ -303,12 +308,14 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         }
         case OP_PARK: {
             double x, y;
-            if (!ctx->zeroed) {
+            double t = ctx->opt.t.park;
+            double d = ctx->opt.d.park;
+            if (!ctx->zeroed || !safeposition (ctx, t, d)) {
                 errno = EINVAL;
                 goto done;
             }
-            x = controller_fromarcsec (&ctx->opt.t, ctx->opt.t.park);
-            y = controller_fromarcsec (&ctx->opt.d, ctx->opt.d.park);
+            x = controller_fromarcsec (&ctx->opt.t, t);
+            y = controller_fromarcsec (&ctx->opt.d, d);
             if (motion_set_position (ctx->t, x) < 0)
                 goto done;
             if (motion_set_position (ctx->d, y) < 0)
@@ -481,6 +488,13 @@ int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec)
     return lrint (steps_persec);
 }
 
+bool safeposition (ctx_t *ctx, double t, double d)
+{
+    if (t < ctx->opt.t.low_limit || t > ctx->opt.t.high_limit
+     || d < ctx->opt.d.low_limit || d > ctx->opt.d.high_limit)
+        return false;
+    return true;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
