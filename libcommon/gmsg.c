@@ -104,7 +104,7 @@ gmsg_t gmsg_create (uint8_t op)
         gmsg_destroy (&g);
         goto done;
     }
-    /* Add dealer-router route delimiter.
+    /* Add dealer-router route delimiter
      */
     if (zmsg_pushmem (g->zmsg, NULL, 0) < 0) {
         gmsg_destroy (&g);

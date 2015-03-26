@@ -366,11 +366,15 @@ void op_plot (ctx_t *ctx, int ac, char **av)
     gmsg_t g = NULL;
     FILE *p = NULL;
     FILE *gp = NULL;
+    zsock_t *zsub = NULL;
 
     if (ac != 0) {
         msg ("position takes no arguments");
         goto done;
     }
+    if (!(zsub = zsock_new_sub (ctx->opt.pub_uri, NULL)))
+        err_exit ("zsock_new_sub %s", ctx->opt.pub_uri);
+    zsock_set_subscribe (zsub, "");
     if (!(p = popen ("gnuplot", "w"))) {
         err ("popen gnuplot");
         goto done;
@@ -386,45 +390,29 @@ void op_plot (ctx_t *ctx, int ac, char **av)
             goto done;
         }
     }
-replot:
-    if (!(g = gmsg_create (OP_POSITION))) {
-        err ("gmsg_create");
-        goto done;;
-    }
-    if (gmsg_send (ctx->zreq, g) < 0) {
-        err ("gmsg_send");
-        goto done;
-    }
-    gmsg_destroy (&g);
-    if (!(g = gmsg_recv (ctx->zreq))) {
-        err ("gmsg_recv");
-        goto done;
-    }
-    if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
-                           || gmsg_get_arg2 (g, &arg2) < 0
-                           || gmsg_get_flags (g, &flags) < 0) {
-        err ("server error");
-        goto done;
-    }
-    double t = 1E-2*arg1/(60*60);
-    double d = 1E-2*arg2/(60*60);
+    while ((g = gmsg_recv (zsub))) {
+        if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
+                               || gmsg_get_arg2 (g, &arg2) < 0
+                               || gmsg_get_flags (g, &flags) < 0) {
+            err ("server error");
+            goto done;
+        }
+        double t = 1E-2*arg1/(60*60);
+        double d = 1E-2*arg2/(60*60);
 
-    msg ("plotting (%f,%f)\n", t, d);
+        fprintf (p, "%f %f\n", t, d);
+        fprintf (p, "e\n");
+        fflush (p);
 
-    fprintf (p, "%f %f\n", t, d);
-    fprintf (p, "e\n");
-    fflush (p);
-    if ((flags & FLAG_D_MOVING) || (flags & FLAG_T_MOVING))
-        sleep (1);
-    else
-        sleep (10);
-    fprintf (p, "replot\n");
-    goto replot;
+        fprintf (p, "replot\n");
+        gmsg_destroy (&g);
+    }
 done:
     if (gp)
         fclose (gp);
     if (p)
         pclose (p);
+    zsock_destroy (&zsub);
     gmsg_destroy (&g);
 }
 
