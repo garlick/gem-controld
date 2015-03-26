@@ -80,8 +80,8 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: gem [OPTIONS] position      (arcsec)\n"
-"                     goto t d      (arcsec)\n"
+"Usage: gem [OPTIONS] position      (degrees)\n"
+"                     goto t d      (degrees)\n"
 "                     track [vt vd] (arcsec/sec)\n"
 "                     stop\n"
 "                     zero\n"
@@ -180,7 +180,8 @@ void op_position (ctx_t *ctx, int ac, char **av)
         err ("server error");
         goto done;
     }
-    msg ("(%.2f,%.2f) tracking=%s%s moving=%s%s", 1E-2*arg1, 1E-2*arg2,
+    msg ("(%.2f,%.2f) tracking=%s%s moving=%s%s",
+        1E-2*arg1/(60*60), 1E-2*arg2/(60*60),
         (flags & FLAG_T_TRACKING) ? "t" : "",
         (flags & FLAG_D_TRACKING) ? "d" : "",
         (flags & FLAG_T_MOVING)   ? "t" : "",
@@ -301,8 +302,8 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         err ("gmsg_create");
         goto done;;
     }
-    t = strtod (av[0], NULL);
-    d = strtod (av[1], NULL);
+    t = strtod (av[0], NULL) * 60*60;
+    d = strtod (av[1], NULL) * 60*60;
     if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
         err ("gmsg_set_arg1");
     if (gmsg_set_arg2 (g, (int32_t)(1E2*d)) < 0)
@@ -320,7 +321,7 @@ void op_goto (ctx_t *ctx, int ac, char **av)
         err ("server error");
         goto done;
     }
-    msg ("slewing to (%.2f,%.2f)", t, d);
+    msg ("slewing to (%.2f,%.2f)", t/(60*60), d/(60*60));
 done:
     gmsg_destroy (&g);
 }
