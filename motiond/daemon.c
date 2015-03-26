@@ -82,6 +82,7 @@ double controller_toarcsec (opt_axis_t *axis, double steps);
 
 bool safeposition (ctx_t *ctx, double t, double d);
 bool motion_inprogress (ctx_t *ctx);
+int start_goto (ctx_t *ctx, double t, double d);
 
 #define OPTIONS "+c:hd"
 static const struct option longopts[] = {
@@ -283,7 +284,6 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
         }
         case OP_GOTO: {
             int32_t arg1, arg2;
-            double x, y;
             double t, d;
             if (gmsg_get_arg1 (g, &arg1) < 0)
                 goto done;
@@ -299,11 +299,7 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 errno = EAGAIN;
                 goto done;
             }
-            x = controller_fromarcsec (&ctx->opt.t, t);
-            y = controller_fromarcsec (&ctx->opt.d, d);
-            if (motion_set_position (ctx->t, x) < 0)
-                goto done;
-            if (motion_set_position (ctx->d, y) < 0)
+            if (start_goto (ctx, t, d) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -312,7 +308,6 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_PARK: {
-            double x, y;
             double t = ctx->opt.t.park;
             double d = ctx->opt.d.park;
             if (!ctx->zeroed || !safeposition (ctx, t, d)) {
@@ -323,11 +318,7 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
                 errno = EAGAIN;
                 goto done;
             }
-            x = controller_fromarcsec (&ctx->opt.t, t);
-            y = controller_fromarcsec (&ctx->opt.d, d);
-            if (motion_set_position (ctx->t, x) < 0)
-                goto done;
-            if (motion_set_position (ctx->d, y) < 0)
+            if (start_goto (ctx, t, d) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -495,6 +486,22 @@ int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec)
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);
     return lrint (steps_persec);
+}
+
+int start_goto (ctx_t *ctx, double t, double d)
+{
+    double x = controller_fromarcsec (&ctx->opt.t, t);
+    double y = controller_fromarcsec (&ctx->opt.d, d);
+    int rc = -1;
+
+    if (motion_set_position (ctx->t, x) < 0)
+        goto done;
+    if (motion_set_position (ctx->d, y) < 0)
+        goto done;
+    ctx->stopped = true; /* client should restart tracking after goto */
+    rc = 0;
+done:
+    return rc;
 }
 
 bool motion_inprogress (ctx_t *ctx)
