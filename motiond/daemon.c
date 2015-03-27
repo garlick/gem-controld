@@ -90,11 +90,12 @@ bool safeposition (ctx_t *ctx, double t, double d);
 bool motion_inprogress (ctx_t *ctx);
 int start_goto (ctx_t *ctx, double t, double d);
 
-#define OPTIONS "+c:hd"
+#define OPTIONS "+c:hdf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug",                no_argument,       0, 'd'},
+    {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
 
@@ -102,8 +103,9 @@ static void usage (void)
 {
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
-"    -c,--config FILE         set path to config file\n"
-"    -d,--debug               emit verbose debugging to stderr\n"
+"    -c,--config FILE    set path to config file\n"
+"    -d,--debug          emit verbose debugging to stderr\n"
+"    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
 }
@@ -113,6 +115,7 @@ int main (int argc, char *argv[])
     int ch;
     ctx_t ctx;
     char *config_filename = NULL;
+    int flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -135,6 +138,10 @@ int main (int argc, char *argv[])
                 break;
             case 'd':   /* --debug */
                 ctx.opt.debug = true;
+                flags |= MOTION_DEBUG;
+                break;
+            case 'f':   /* --force */
+                flags |= MOTION_RESET;
                 break;
             case 'h':   /* --help */
             default:
@@ -151,9 +158,6 @@ int main (int argc, char *argv[])
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    int flags = 0;
-    if (ctx.opt.debug)
-        flags |= MOTION_DEBUG;
     ctx.t = init_axis (&ctx.opt.t, "t", flags);
     ctx.d = init_axis (&ctx.opt.d, "d", flags);
     if (init_origin (&ctx) < 0)
