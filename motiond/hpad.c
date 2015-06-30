@@ -138,7 +138,7 @@ int hpad_init (hpad_t h, const char *pins, double debounce,
         if (!tok) {
             errno = EINVAL;
             goto done;
-        } 
+        }
         p->pin = strtoul (tok, NULL, 10);
         if (gpio_set_export (p->pin, true) < 0)
             goto done;

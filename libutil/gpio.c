@@ -152,7 +152,7 @@ int gpio_read (int fd, int *val)
     if (n == 0) {
         errno = EIO;
         goto done;
-    } 
+    }
     *val = (c == '0' ? 0 : 1);
     rc = 0;
 done:

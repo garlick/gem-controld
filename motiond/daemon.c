@@ -184,19 +184,19 @@ int main (int argc, char *argv[])
 
     ev_timer_init (&ctx.pub_w, pub_cb, pub_slow, pub_slow);
     ev_timer_start (ctx.loop, &ctx.pub_w);
-    
+
     zsys_handler_set (NULL); /* disable zeromq signal handling */
 
-    ev_run (ctx.loop, 0); 
+    ev_run (ctx.loop, 0);
     ev_loop_destroy (ctx.loop);
 
     hpad_stop (ctx.loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
 
     if (ctx.d)
-        motion_fini (ctx.d); 
+        motion_fini (ctx.d);
     if (ctx.t)
-        motion_fini (ctx.t); 
+        motion_fini (ctx.t);
 
     zsock_destroy (&ctx.zreq);
 
@@ -223,13 +223,13 @@ int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
     if (motion_get_status (ctx->d, &b) < 0)
         goto done;
     if ((a & MOTION_STATUS_TRACKING))
-        flags |= FLAG_T_TRACKING; 
+        flags |= FLAG_T_TRACKING;
     if ((a & MOTION_STATUS_MOVING))
-        flags |= FLAG_T_MOVING; 
+        flags |= FLAG_T_MOVING;
     if ((b & MOTION_STATUS_TRACKING))
-        flags |= FLAG_D_TRACKING; 
+        flags |= FLAG_D_TRACKING;
     if ((b & MOTION_STATUS_MOVING))
-        flags |= FLAG_D_MOVING; 
+        flags |= FLAG_D_MOVING;
     if (gmsg_set_flags (g, flags) < 0)
         goto done;
     if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
@@ -501,7 +501,7 @@ void hpad_cb (hpad_t h, void *arg)
             if (motion_set_velocity (ctx->t, -1*v) < 0)
                 err_exit ("t: set velocity");
             break;
-        } 
+        }
         case HPAD_KEY_M1: /* zero */
             if (set_origin (ctx) < 0)
                 err_exit ("set origin");

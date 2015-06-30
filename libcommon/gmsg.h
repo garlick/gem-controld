@@ -27,7 +27,7 @@ gmsg_t gmsg_recv (void *sock);
 int gmsg_send (void *sock, gmsg_t g);
 
 /* Operations
- * Coordinate units are hundredth-arcsec 
+ * Coordinate units are hundredth-arcsec
  * Velocity units are hundredth-arcsec/sec
  */
 enum {

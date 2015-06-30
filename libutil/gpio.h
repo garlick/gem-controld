@@ -1,7 +1,6 @@
 #include <stdbool.h>
 
-/* All functions return 0 on succes, or
- * -1 on error with errno set, 
+/* All functions return 0 on succes, or -1 on error with errno set
  */
 
 /* Export/unexport  a GPIO pin.

@@ -115,7 +115,7 @@ static int config_cb (void *user, const char *section, const char *name,
             if (opt->pub_uri)
                 free (opt->pub_uri);
             opt->pub_uri = xstrdup (value);
-        } 
+        }
     }
     return rc;
 }
