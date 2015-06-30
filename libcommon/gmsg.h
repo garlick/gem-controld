@@ -18,6 +18,9 @@ int gmsg_get_arg1 (gmsg_t g, int32_t *arg);
 int gmsg_set_arg2 (gmsg_t g, int32_t arg);
 int gmsg_get_arg2 (gmsg_t g, int32_t *arg);
 
+int gmsg_set_arg3 (gmsg_t g, int32_t arg);
+int gmsg_get_arg3 (gmsg_t g, int32_t *arg);
+
 int gmsg_set_error (gmsg_t g, int32_t errnum);
 int gmsg_error (gmsg_t g);
 
@@ -37,20 +40,25 @@ enum {
     OP_TRACK = 3,       /* start tracking (optional args) */
     OP_GOTO = 4,        /* slew to specified coordinates */
     OP_POSITION = 5,    /* get current position */
+    OP_FOCUS = 6,       /* change focus position */
 };
 
 /* Flags
  */
 enum {
-    FLAG_ERROR      = 0x0001,       /* request failed (see arg1 for errnum) */
-    FLAG_ARG1       = 0x0002,       /* arg1 is valid */
-    FLAG_ARG2       = 0x0004,       /* arg2 is valid */
+    FLAG_ERROR        = 0x0001,     /* request failed (see arg1 for errnum) */
+    FLAG_ARG1         = 0x0002,     /* arg1 is valid */
+    FLAG_ARG2         = 0x0004,     /* arg2 is valid */
+    FLAG_ARG3         = 0x0008,     /* arg3 is valid */
+
+    FLAG_F_MOVING     = 0x0080,     /* f axis goto in progress */
 
     FLAG_T_TRACKING   = 0x0100,     /* t axis moving at constant velocity */
     FLAG_T_MOVING     = 0x0200,     /* t axis goto/park in progress */
 
     FLAG_D_TRACKING   = 0x0400,     /* d axis moving at constant velocity */
     FLAG_D_MOVING     = 0x0800,     /* d axis goto/park in progress */
+
 };
 
 /*

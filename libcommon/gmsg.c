@@ -29,12 +29,13 @@
 #include "libutil/xzmalloc.h"
 #include "gmsg.h"
 
-#define PROTO_SIZE      16
+#define PROTO_SIZE      20
 #define PROTO_OFF_OP    0   /* 1 byte */
                             /* 3 bytes (unused) */
 #define PROTO_OFF_FLAGS 4   /* 4 bytes */
 #define PROTO_OFF_ARG1  8   /* 4 bytes */
 #define PROTO_OFF_ARG2  12  /* 4 bytes */
+#define PROTO_OFF_ARG3  16  /* 4 bytes */
 
 struct gmsg_struct {
     zmsg_t *zmsg;
@@ -88,6 +89,20 @@ static void get_arg2 (uint8_t *proto, int32_t *arg)
     memcpy (&x, &proto[PROTO_OFF_ARG2], sizeof (x));
     *arg = ntohl (x);
 }
+
+static void set_arg3 (uint8_t *proto, int32_t arg)
+{
+    int32_t x = htonl (arg);
+    memcpy (&proto[PROTO_OFF_ARG3], &x, sizeof (x));
+}
+
+static void get_arg3 (uint8_t *proto, int32_t *arg)
+{
+    int32_t x;
+    memcpy (&x, &proto[PROTO_OFF_ARG3], sizeof (x));
+    *arg = ntohl (x);
+}
+
 
 gmsg_t gmsg_create (uint8_t op)
 {
@@ -281,6 +296,47 @@ done:
     return rc;
 }
 
+int gmsg_set_arg3 (gmsg_t g, int32_t arg)
+{
+    uint32_t flags;
+    int rc = -1;
+
+    zframe_t *zf = zmsg_last (g->zmsg);
+    if (!zf || zframe_size (zf) != PROTO_SIZE) {
+        errno = EINVAL;
+        goto done;
+    }
+    set_arg3 (zframe_data (zf), arg);
+    get_flags (zframe_data (zf), &flags);
+    flags |= FLAG_ARG3;
+    set_flags (zframe_data (zf), flags);
+    rc = 0;
+done:
+    return rc;
+}
+
+int gmsg_get_arg3 (gmsg_t g, int32_t *arg)
+{
+    uint32_t flags;
+    int rc = -1;
+
+    zframe_t *zf = zmsg_last (g->zmsg);
+    if (!zf || zframe_size (zf) != PROTO_SIZE) {
+        errno = EPROTO;
+        goto done;
+    }
+    get_flags (zframe_data (zf), &flags);
+    if (!(flags & FLAG_ARG3)) {
+        errno = EPROTO;
+        goto done;
+    }
+    get_arg3 (zframe_data (zf), arg);
+    rc = 0;
+done:
+    return rc;
+}
+
+
 int gmsg_error (gmsg_t g)
 {
     int rc = -1;
@@ -305,7 +361,7 @@ void gmsg_dump (FILE *f, gmsg_t g, const char *prefix)
 {
     uint8_t op;
     uint32_t flags;
-    int32_t arg1, arg2;
+    int32_t arg1, arg2, arg3;
 
     zframe_t *zf = zmsg_last (g->zmsg);
     if (!zf || zframe_size (zf) != PROTO_SIZE) {
@@ -316,7 +372,9 @@ void gmsg_dump (FILE *f, gmsg_t g, const char *prefix)
     get_flags (zframe_data (zf), &flags);
     get_arg1 (zframe_data (zf), &arg1);
     get_arg2 (zframe_data (zf), &arg2);
-    fprintf (f, "%s: [%d] 0x%.4x %d %d\n", prefix, op, flags, arg1, arg2);
+    get_arg3 (zframe_data (zf), &arg3);
+    fprintf (f, "%s: [%d] 0x%.4x %d %d %d\n",
+             prefix, op, flags, arg1, arg2, arg3);
 }
 
 int gmsg_set_error (gmsg_t g, int32_t errnum)
