@@ -27,6 +27,9 @@
  * telescope on west side of pier.
  *
  * (x,y) refers to telescope position in whole steps.  Origin (0,0).
+
+ * f refers to focus position in microns (origin 0, full ccw/out)
+ * z refers to focus position in whole steps
  */
 
 #include <stdio.h>
@@ -63,7 +66,7 @@ char *prog = "";
 typedef struct {
     opt_t opt;
     hpad_t hpad;
-    motion_t t, d;
+    motion_t t, d, f;
     zsock_t *zreq;
     zsock_t *zpub;
     struct ev_loop *loop;
@@ -85,6 +88,10 @@ void pub_cb (struct ev_loop *loop, ev_timer *w, int revents);
 int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
 double controller_fromarcsec (opt_axis_t *axis, double arcsec);
 double controller_toarcsec (opt_axis_t *axis, double steps);
+
+double controller_frommicrons (opt_axis_t *axis, double microns);
+double controller_tomicrons (opt_axis_t *axis, double steps);
+
 
 bool safeposition (ctx_t *ctx, double t, double d);
 bool motion_inprogress (ctx_t *ctx);
@@ -160,6 +167,7 @@ int main (int argc, char *argv[])
 
     ctx.t = init_axis (&ctx.opt.t, "t", flags);
     ctx.d = init_axis (&ctx.opt.d, "d", flags);
+    ctx.f = init_axis (&ctx.opt.f, "f", flags);
     if (init_origin (&ctx) < 0)
         err_exit ("init_origin");
     if (init_stopped (&ctx) < 0)
@@ -197,6 +205,8 @@ int main (int argc, char *argv[])
         motion_fini (ctx.d);
     if (ctx.t)
         motion_fini (ctx.t);
+    if (ctx.f)
+        motion_fini (ctx.f);
 
     zsock_destroy (&ctx.zreq);
 
@@ -510,6 +520,22 @@ void hpad_cb (hpad_t h, void *arg)
             ctx->stopped = !ctx->stopped;
             break;
     }
+}
+
+/* Return position in microns from controller steps.
+ * (microns are units for focus axis position)
+ */
+double controller_tomicrons (opt_axis_t *axis, double steps)
+{
+    return steps * 1E6 / axis->steps;
+}
+
+/* Calculate position in steps for motion controller from microns.
+ * (microns are units for focus axis position)
+ */
+double controller_frommicrons (opt_axis_t *axis, double microns)
+{
+    return microns * axis->steps * 1E-6;
 }
 
 /* Return position in arcsec from controller steps

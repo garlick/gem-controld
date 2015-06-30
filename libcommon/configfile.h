@@ -18,6 +18,7 @@ typedef struct {
 typedef struct {
     opt_axis_t t;
     opt_axis_t d;
+    opt_axis_t f;
     bool debug;
     bool no_motion;
     bool soft_init;

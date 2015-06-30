@@ -99,6 +99,8 @@ static int config_cb (void *user, const char *section, const char *name,
         rc = config_axis (&opt->t, name, value);
     else if (!strcmp (section, "d_axis"))
         rc = config_axis (&opt->d, name, value);
+    else if (!strcmp (section, "f_axis"))
+        rc = config_axis (&opt->f, name, value);
     else if (!strcmp (section, "hpad")) {
         if (!strcmp (name, "gpio")) {
             if (opt->hpad_gpio)
