@@ -251,6 +251,8 @@ int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
         flags |= FLAG_D_TRACKING;
     if ((b & MOTION_STATUS_MOVING))
         flags |= FLAG_D_MOVING;
+    if ((c & MOTION_STATUS_TRACKING))
+        flags |= FLAG_F_TRACKING;
     if ((c & MOTION_STATUS_MOVING))
         flags |= FLAG_F_MOVING;
     if (gmsg_set_flags (g, flags) < 0)
