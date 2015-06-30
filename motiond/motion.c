@@ -67,7 +67,6 @@ static char *toliteral (const char *s)
             else
                 buf[strlen (buf)] = *p;
             p++;
-            
         }
     }
     return buf;
@@ -204,7 +203,7 @@ static int mopen (motion_t m)
 
     if ((m->fd = open(m->devname, O_RDWR | O_NOCTTY)) < 0)
         return -1;
-    memset (&tio, 0, sizeof (tio)); 
+    memset (&tio, 0, sizeof (tio));
     tio.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
     tio.c_iflag = IGNPAR;
     tio.c_oflag = 0;
