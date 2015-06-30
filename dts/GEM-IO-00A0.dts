@@ -15,7 +15,8 @@
         "P8.10", "gpio2_4",
 
         "P9.24", "P9.26", "uart1",                    // motion control RS-422
-        "P9.21", "P9.22", "uart2";
+        "P9.21", "P9.22", "uart2",
+        "P9.11", "P9.13", "uart4";
 
 // UART 1 is connected to RA motion controller
 
@@ -63,9 +64,33 @@
         };
     };
 
-// 4 GPIO inputs are connected to handbox, with external pull-downs
+// UART 4 is connected to focus motion controller
 
     fragment@4 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            gem_focus_uart: pinmux_gem_focus_uart {
+                pinctrl-single,pins = <
+                    0x074 0x06             // P9.13 mode6 output (tx) 
+                    0x070 0x26             // P9.11 mode6 input (rx) 
+                >;
+            };
+        };
+    };
+
+    fragment@5 {
+        target = <&uart5>; // really uart4
+        __overlay__ {
+            status = "okay";
+            pinctrl-names = "default";
+            pinctrl-0 = <&gem_focus_uart>;
+        };
+    };
+
+
+// 4 GPIO inputs are connected to handbox, with external pull-downs
+
+    fragment@6 {
         target = <&am33xx_pinmux>;
         __overlay__ {
             gem_hbox: pinmux_gem_hbox {
@@ -79,7 +104,7 @@
         };
     };
  
-    fragment@5 {
+    fragment@7 {
         target = <&ocp>;
         __overlay__ {
             gem_hbox_pinmux {
