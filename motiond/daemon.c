@@ -74,6 +74,7 @@ typedef struct {
     ev_timer pub_w;
     bool stopped;
     bool zeroed;
+    bool focusmode;
 } ctx_t;
 
 motion_t init_axis (opt_axis_t *a, const char *name, int flags);
@@ -89,6 +90,7 @@ int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
 double controller_fromarcsec (opt_axis_t *axis, double arcsec);
 double controller_toarcsec (opt_axis_t *axis, double steps);
 
+int controller_vfrommicrons (opt_axis_t *axis, double microns_persec);
 double controller_frommicrons (opt_axis_t *axis, double microns);
 double controller_tomicrons (opt_axis_t *axis, double steps);
 
@@ -517,39 +519,62 @@ void hpad_cb (hpad_t h, void *arg)
                 err_exit ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
                 err_exit ("d: set velocity");
+            if (motion_set_velocity (ctx->f, 0) < 0)
+                err_exit ("f: set velocity");
             break;
         }
         case HPAD_KEY_NORTH: {
-            int v = controller_vfromarcsec (&ctx->opt.d, fast ? ctx->opt.d.fast
-                                                           : ctx->opt.d.slow);
-            if (motion_set_velocity (ctx->d, v) < 0)
-                err_exit ("d: set velocity");
+            if (ctx->focusmode) {
+                int v = controller_vfrommicrons (&ctx->opt.f,
+                                    fast ? ctx->opt.f.fast : ctx->opt.f.slow);
+                if (motion_set_velocity (ctx->f, v) < 0)
+                    err_exit ("f: set velocity");
+            } else {
+                int v = controller_vfromarcsec (&ctx->opt.d,
+                                    fast ? ctx->opt.d.fast : ctx->opt.d.slow);
+                if (motion_set_velocity (ctx->d, v) < 0)
+                    err_exit ("d: set velocity");
+            }
             break;
         }
         case HPAD_KEY_SOUTH: {
-            int v = controller_vfromarcsec (&ctx->opt.d, fast ? ctx->opt.d.fast
-                                                           : ctx->opt.d.slow);
-            if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err_exit ("d: set velocity");
+            if (ctx->focusmode) {
+                int v = controller_vfrommicrons (&ctx->opt.f,
+                                    fast ? ctx->opt.f.fast : ctx->opt.f.slow);
+                if (motion_set_velocity (ctx->f, -1*v) < 0)
+                    err_exit ("f: set velocity");
+            } else {
+                int v = controller_vfromarcsec (&ctx->opt.d,
+                                    fast ? ctx->opt.d.fast : ctx->opt.d.slow);
+                if (motion_set_velocity (ctx->d, -1*v) < 0)
+                    err_exit ("d: set velocity");
+            }
             break;
         }
         case HPAD_KEY_WEST: {
-            int v = controller_vfromarcsec (&ctx->opt.t, fast ? ctx->opt.t.fast
-                                                           : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, v) < 0)
-                err_exit ("t: set velocity");
+            if (!ctx->focusmode) {
+                int v = controller_vfromarcsec (&ctx->opt.t,
+                                    fast ? ctx->opt.t.fast : ctx->opt.t.slow);
+                if (motion_set_velocity (ctx->t, v) < 0)
+                    err_exit ("t: set velocity");
+            }
             break;
         }
         case HPAD_KEY_EAST: {
-            int v = controller_vfromarcsec (&ctx->opt.t, fast ? ctx->opt.t.fast
-                                                           : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, -1*v) < 0)
-                err_exit ("t: set velocity");
+            if (!ctx->focusmode) {
+                int v = controller_vfromarcsec (&ctx->opt.t,
+                                    fast ? ctx->opt.t.fast : ctx->opt.t.slow);
+                if (motion_set_velocity (ctx->t, -1*v) < 0)
+                    err_exit ("t: set velocity");
+            }
             break;
         }
-        case HPAD_KEY_M1: /* zero */
+        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
             if (set_origin (ctx) < 0)
                 err_exit ("set origin");
+            break;
+        case HPAD_KEY_M1: /* toggle focus/mount mode */
+            ctx->focusmode = !ctx->focusmode;
             break;
         case HPAD_KEY_M2: /* toggle stop */
             ctx->stopped = !ctx->stopped;
@@ -571,6 +596,15 @@ double controller_tomicrons (opt_axis_t *axis, double steps)
 double controller_frommicrons (opt_axis_t *axis, double microns)
 {
     return microns * axis->steps * 1E-6;
+}
+
+int controller_vfrommicrons (opt_axis_t *axis, double microns_persec)
+{
+    double steps_persec = microns_persec * axis->steps * 1E-6;
+
+    if (axis->mode == 1)
+        steps_persec *= 1<<(axis->resolution);
+    return lrint (steps_persec);
 }
 
 /* Return position in arcsec from controller steps
