@@ -93,9 +93,13 @@ double controller_frommicrons (opt_axis_t *axis, double microns);
 double controller_tomicrons (opt_axis_t *axis, double steps);
 
 
+bool safeposition_focus (ctx_t *ctx, double f);
 bool safeposition (ctx_t *ctx, double t, double d);
+
 bool motion_inprogress (ctx_t *ctx);
+
 int start_goto (ctx_t *ctx, double t, double d);
+int start_focus (ctx_t *ctx, double f);
 
 #define OPTIONS "+c:hdf"
 static const struct option longopts[] = {
@@ -215,8 +219,8 @@ int main (int argc, char *argv[])
 
 int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
 {
-    double x, y;
-    uint8_t a, b;
+    double x, y, z;
+    uint8_t a, b, c;
     uint32_t flags = 0;
     int rc = -1;
 
@@ -226,11 +230,16 @@ int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
         goto done;
     if (motion_get_position (ctx->d, &y) < 0)
         goto done;
+    if (motion_get_position (ctx->f, &z) < 0)
+        goto done;
     double t = controller_toarcsec (&ctx->opt.t, x);
     double d = controller_toarcsec (&ctx->opt.d, y);
+    double f = controller_toarcsec (&ctx->opt.d, z);
     if (motion_get_status (ctx->t, &a) < 0)
         goto done;
     if (motion_get_status (ctx->d, &b) < 0)
+        goto done;
+    if (motion_get_status (ctx->f, &c) < 0)
         goto done;
     if ((a & MOTION_STATUS_TRACKING))
         flags |= FLAG_T_TRACKING;
@@ -240,11 +249,15 @@ int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
         flags |= FLAG_D_TRACKING;
     if ((b & MOTION_STATUS_MOVING))
         flags |= FLAG_D_MOVING;
+    if ((c & MOTION_STATUS_MOVING))
+        flags |= FLAG_F_MOVING;
     if (gmsg_set_flags (g, flags) < 0)
         goto done;
     if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
         goto done;
     if (gmsg_set_arg2 (g, (int32_t)(1E2*d)) < 0)
+        goto done;
+    if (gmsg_set_arg3 (g, (int32_t)f) < 0)
         goto done;
     if (moving)
 	*moving = ((a & MOTION_STATUS_MOVING) || (b & MOTION_STATUS_MOVING));
@@ -300,7 +313,8 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             break;
         }
         case OP_STOP: {
-            if (motion_stop (ctx->t) < 0 || motion_stop (ctx->d) < 0)
+            if (motion_stop (ctx->t) < 0 || motion_stop (ctx->d) < 0
+                                         || motion_stop (ctx->f) < 0)
                 goto done;
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
@@ -383,6 +397,27 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             if (gmsg_set_flags (g, 0) < 0)
                 goto done;
             ctx->stopped = true;
+            rc = 0;
+            break;
+        }
+        case OP_FOCUS: {
+            int32_t arg3;
+            double f;
+            if (gmsg_get_arg3 (g, &arg3) < 0)
+                goto done;
+            f = (double)arg3;
+            if (!safeposition_focus (ctx, f)) {
+                errno = EINVAL;
+                goto done;
+            }
+            if (motion_inprogress (ctx) < 0) {
+                errno = EAGAIN;
+                goto done;
+            }
+            if (start_focus (ctx, f) < 0)
+                goto done;
+            if (gmsg_set_flags (g, 0) < 0)
+                goto done;
             rc = 0;
             break;
         }
@@ -584,12 +619,29 @@ done:
     return rc;
 }
 
+int start_focus (ctx_t *ctx, double f)
+{
+    assert (ctx->zeroed == true);
+
+    double z = controller_frommicrons (&ctx->opt.f, f);
+    int rc = -1;
+
+    if (motion_set_position (ctx->f, z) < 0)
+        goto done;
+    ctx->pub_w.repeat = pub_fast;
+    ev_timer_again (ctx->loop, &ctx->pub_w);
+    rc = 0;
+done:
+    return rc;
+}
+
 bool motion_inprogress (ctx_t *ctx)
 {
     uint8_t s;
 
     if ((motion_get_status (ctx->t, &s) == 0 && (s & MOTION_STATUS_MOVING))
-     || (motion_get_status (ctx->d, &s) == 0 && (s & MOTION_STATUS_MOVING)))
+     || (motion_get_status (ctx->d, &s) == 0 && (s & MOTION_STATUS_MOVING))
+     || (motion_get_status (ctx->f, &s) == 0 && (s & MOTION_STATUS_MOVING)))
         return true;
     return false;
 }
@@ -598,6 +650,13 @@ bool safeposition (ctx_t *ctx, double t, double d)
 {
     if (t < ctx->opt.t.low_limit || t > ctx->opt.t.high_limit
      || d < ctx->opt.d.low_limit || d > ctx->opt.d.high_limit)
+        return false;
+    return true;
+}
+
+bool safeposition_focus (ctx_t *ctx, double f)
+{
+    if (f < ctx->opt.f.low_limit || f > ctx->opt.f.high_limit)
         return false;
     return true;
 }
