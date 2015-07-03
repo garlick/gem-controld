@@ -35,6 +35,16 @@ int motion_set_acceleration (motion_t m, int accel, int decel);
  */
 int motion_set_mode (motion_t m, int mode);
 
+/* Set initial velocity for ramp-up, 20:20000
+ * In full steps per sec (auto mode), or pulses per sec (fixed mode).
+ */
+int motion_set_initial_velocity (motion_t m, int velocity);
+
+/* Set fnial velocity for ramp-up, 20:20000
+ * In full steps per sec (auto mode), or pulses per sec (fixed mode).
+ */
+int motion_set_final_velocity (motion_t m, int velocity);
+
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.
  */

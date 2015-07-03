@@ -356,6 +356,24 @@ int motion_set_acceleration (motion_t m, int accel, int decel)
     return mcmd (m, "K%d %d", accel, decel);
 }
 
+int motion_set_initial_velocity (motion_t m, int velocity)
+{
+    if (velocity < 20  || velocity > 20000) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "I%d", velocity);
+}
+
+int motion_set_final_velocity (motion_t m, int velocity)
+{
+    if (velocity < 20  || velocity > 20000) {
+        errno = EINVAL;
+        return -1;
+    }
+    return mcmd (m, "V%d", velocity);
+}
+
 int motion_set_velocity (motion_t m, int velocity)
 {
     if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {

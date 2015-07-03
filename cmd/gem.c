@@ -61,6 +61,7 @@ void op_zero (ctx_t *ctx, int ac, char **av);
 void op_goto (ctx_t *ctx, int ac, char **av);
 void op_park (ctx_t *ctx, int ac, char **av);
 void op_plot (ctx_t *ctx, int ac, char **av);
+void op_focus (ctx_t *ctx, int ac, char **av);
 
 static op_t ops[] = {
     { "position", op_position },
@@ -70,6 +71,7 @@ static op_t ops[] = {
     { "goto",     op_goto},
     { "park",     op_park},
     { "plot",     op_plot},
+    { "focus",    op_focus},
 };
 
 #define OPTIONS "+c:h"
@@ -82,13 +84,14 @@ static const struct option longopts[] = {
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: gem [OPTIONS] position      (degrees)\n"
+"Usage: gem [OPTIONS] position\n"
 "                     goto t d      (degrees)\n"
 "                     track [vt vd] (arcsec/sec)\n"
 "                     stop\n"
 "                     zero\n"
 "                     park\n"
 "                     plot\n"
+"                     focus [x]     (microns)\n"
 "OPTIONS:\n"
 "    -c,--config FILE         set path to config file\n"
 );
@@ -156,7 +159,7 @@ int main (int argc, char *argv[])
 
 void op_position (ctx_t *ctx, int ac, char **av)
 {
-    int32_t arg1, arg2;
+    int32_t arg1, arg2, arg3;
     uint32_t flags;
     gmsg_t g = NULL;
 
@@ -179,16 +182,19 @@ void op_position (ctx_t *ctx, int ac, char **av)
     }
     if (gmsg_error (g) < 0 || gmsg_get_arg1 (g, &arg1) < 0
                            || gmsg_get_arg2 (g, &arg2) < 0
+                           || gmsg_get_arg3 (g, &arg3) < 0
                            || gmsg_get_flags (g, &flags) < 0) {
         err ("server error");
         goto done;
     }
-    msg ("(%.2f,%.2f) tracking=%s%s moving=%s%s",
-        1E-2*arg1/(60*60), 1E-2*arg2/(60*60),
-        (flags & FLAG_T_TRACKING) ? "t" : "",
-        (flags & FLAG_D_TRACKING) ? "d" : "",
-        (flags & FLAG_T_MOVING)   ? "t" : "",
-        (flags & FLAG_D_MOVING)   ? "d" : "");
+    msg ("(%.2fdeg,%.2fdeg,%dum) tracking=%s%s%s moving=%s%s%s",
+        1E-2*arg1/(60*60), 1E-2*arg2/(60*60), arg3,
+        (flags & FLAG_T_TRACKING) ? "t" : ".",
+        (flags & FLAG_D_TRACKING) ? "d" : ".",
+        (flags & FLAG_F_TRACKING) ? "f" : ".",
+        (flags & FLAG_T_MOVING)   ? "t" : ".",
+        (flags & FLAG_D_MOVING)   ? "d" : ".",
+        (flags & FLAG_F_MOVING)   ? "f" : ".");
 done:
     gmsg_destroy (&g);
 }
@@ -355,6 +361,40 @@ void op_park (ctx_t *ctx, int ac, char **av)
         goto done;
     }
     msg ("parking");
+done:
+    gmsg_destroy (&g);
+}
+
+void op_focus (ctx_t *ctx, int ac, char **av)
+{
+    int32_t x;
+    gmsg_t g = NULL;
+
+    if (ac != 1) {
+        msg ("goto takes 1 argument");
+        goto done;
+    }
+    if (!(g = gmsg_create (OP_FOCUS))) {
+        err ("gmsg_create");
+        goto done;;
+    }
+    x = strtol (av[0], NULL, 10);
+    if (gmsg_set_arg3 (g, x) < 0)
+        err ("gmsg_set_arg3");
+    if (gmsg_send (ctx->zreq, g) < 0) {
+        err ("gmsg_send");
+        goto done;
+    }
+    gmsg_destroy (&g);
+    if (!(g = gmsg_recv (ctx->zreq))) {
+        err ("gmsg_recv");
+        goto done;
+    }
+    if (gmsg_error (g) < 0) {
+        err ("server error");
+        goto done;
+    }
+    msg ("moving focus %s %d microns", x > 0 ? "in" : "out", abs (x));
 done:
     gmsg_destroy (&g);
 }

@@ -95,7 +95,6 @@ double controller_frommicrons (opt_axis_t *axis, double microns);
 double controller_tomicrons (opt_axis_t *axis, double steps);
 
 
-bool safeposition_focus (ctx_t *ctx, double f);
 bool safeposition (ctx_t *ctx, double t, double d);
 
 bool motion_inprogress (ctx_t *ctx);
@@ -236,7 +235,7 @@ int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
         goto done;
     double t = controller_toarcsec (&ctx->opt.t, x);
     double d = controller_toarcsec (&ctx->opt.d, y);
-    double f = controller_toarcsec (&ctx->opt.d, z);
+    double f = controller_toarcsec (&ctx->opt.f, z);
     if (motion_get_status (ctx->t, &a) < 0)
         goto done;
     if (motion_get_status (ctx->d, &b) < 0)
@@ -410,10 +409,6 @@ void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
             if (gmsg_get_arg3 (g, &arg3) < 0)
                 goto done;
             f = (double)arg3;
-            if (!safeposition_focus (ctx, f)) {
-                errno = EINVAL;
-                goto done;
-            }
             if (motion_inprogress (ctx) < 0) {
                 errno = EAGAIN;
                 goto done;
@@ -455,12 +450,15 @@ int init_stopped (ctx_t *ctx)
 
 int init_origin (ctx_t *ctx)
 {
-    uint8_t a, b;
+    uint8_t a, b, f;
     if (motion_get_port (ctx->t, &a) < 0)
         return -1;
     if (motion_get_port (ctx->d, &b) < 0)
         return -1;
-    ctx->zeroed = ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
+    if (motion_get_port (ctx->f, &f) < 0)
+        return -1;
+    ctx->zeroed = ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0
+                && (f & GREEN_LED_MASK) != 0);
     return 0;
 }
 
@@ -470,9 +468,13 @@ int set_origin (ctx_t *ctx)
         return -1;
     if (motion_set_origin (ctx->d) < 0)
         return -1;
+    if (motion_set_origin (ctx->f) < 0)
+        return -1;
     if (motion_set_port (ctx->t, GREEN_LED_MASK) < 0)
         return -1;
     if (motion_set_port (ctx->d, GREEN_LED_MASK) < 0)
+        return -1;
+    if (motion_set_port (ctx->f, GREEN_LED_MASK) < 0)
         return -1;
     ctx->stopped = true;
     ctx->zeroed = true;
@@ -497,6 +499,10 @@ motion_t init_axis (opt_axis_t *a, const char *name, int flags)
             err_exit ("%s: set resolution", name);
         if (motion_set_acceleration (m, a->accel, a->decel) < 0)
             err_exit ("%s: set acceleration", name);
+        if (motion_set_initial_velocity (m, a->initv) < 0)
+            err_exit ("%s: set initial velocity", name);
+        if (motion_set_final_velocity (m, a->finalv) < 0)
+            err_exit ("%s: set final velocity", name);
     }
     return m;
 }
@@ -657,12 +663,10 @@ done:
 
 int start_focus (ctx_t *ctx, double f)
 {
-    assert (ctx->zeroed == true);
-
     double z = controller_frommicrons (&ctx->opt.f, f);
     int rc = -1;
 
-    if (motion_set_position (ctx->f, z) < 0)
+    if (motion_set_index (ctx->f, z) < 0)
         goto done;
     ctx->pub_w.repeat = pub_fast;
     ev_timer_again (ctx->loop, &ctx->pub_w);
@@ -686,13 +690,6 @@ bool safeposition (ctx_t *ctx, double t, double d)
 {
     if (t < ctx->opt.t.low_limit || t > ctx->opt.t.high_limit
      || d < ctx->opt.d.low_limit || d > ctx->opt.d.high_limit)
-        return false;
-    return true;
-}
-
-bool safeposition_focus (ctx_t *ctx, double f)
-{
-    if (f < ctx->opt.f.low_limit || f > ctx->opt.f.high_limit)
         return false;
     return true;
 }

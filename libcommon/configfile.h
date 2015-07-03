@@ -4,6 +4,8 @@ typedef struct {
     int resolution;
     int ihold;
     int irun;
+    int initv;
+    int finalv;
     int accel;
     int decel;
     int steps;

@@ -57,6 +57,10 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
         a->resolution = strtoul (value, NULL, 10);
     else if (!strcmp (name, "mode"))
         a->mode = !strcmp (value, "auto") ? 1 : 0;
+    else if (!strcmp (name, "initv"))
+        a->initv = strtoul (value, NULL, 10);
+    else if (!strcmp (name, "finalv"))
+        a->finalv = strtoul (value, NULL, 10);
     else if (!strcmp (name, "slow"))
         a->slow = strtod (value, NULL);
     else if (!strcmp (name, "fast"))
