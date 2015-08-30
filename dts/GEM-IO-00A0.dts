@@ -14,6 +14,11 @@
         "P8.9", "gpio2_5",
         "P8.10", "gpio2_4",
 
+	"P8.43", "gpio2_8",                           // guide GIPO pins
+        "P8.44", "gpio2_9",
+        "P8.45", "gpio2_6",
+        "P8_46", "gpio2_7",
+
         "P9.24", "P9.26", "uart1",                    // motion control RS-422
         "P9.21", "P9.22", "uart2",
         "P9.11", "P9.13", "uart4";
@@ -115,4 +120,33 @@
             };
         };
     };
+
+// 4 GPIO inputs are connected to guide port (internal pull-ups)
+
+    fragment@8 {
+        target = <&am33xx_pinmux>;
+        __overlay__ {
+            gem_guide: pinmux_gem_guide {
+                pinctrl-single,pins = <
+                    0x0a8 0x37             // P8.43 mode7 input + p/u
+                    0x0ac 0x37             // P8.44 mode7 input + p/u
+                    0x0a0 0x37             // P8.45 mode7 input + p/u
+                    0x0a4 0x37             // P8.46 mode7 input + p/u
+                >;
+            };
+        };
+    };
+ 
+    fragment@9 {
+        target = <&ocp>;
+        __overlay__ {
+            gem_guide_pinmux {
+                compatible = "bone-pinmux-helper";
+                status = "okay";
+                pinctrl-names = "default";
+                pinctrl-0 = <&gem_guide>;
+            };
+        };
+    };
+
 };

@@ -26,6 +26,8 @@ typedef struct {
     bool soft_init;
     char *hpad_gpio;
     double hpad_debounce;
+    char *guide_gpio;
+    double guide_debounce;
     char *req_bind_uri;
     char *pub_bind_uri;
     char *req_connect_uri;

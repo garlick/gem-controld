@@ -9,7 +9,7 @@ LIBS = 	-L$(abs_topdir)/libutil -lutil \
 
 all: $(PROG)
 
-$(PROG): hpad.o motion.o daemon.o
+$(PROG): hpad.o guide.o motion.o daemon.o
 	$(CC) -o $@ $^ $(LIBS)
 
 install: $(PROG)

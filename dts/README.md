@@ -18,6 +18,10 @@ The cape includes:
           |
          GND
 ```
+* Four GPIO lines wired to a [ST-4 compatible guide port](http://www.store.shoestringastronomy.com/guide_port_cables.pdf) with internal pull-ups and 220 ohm
+resistors in series as above.  Pin 1 of the guide port is no connection,
+while pin 2 is at 3V3.
+
 
 ### Installing the overlay
 

@@ -112,6 +112,13 @@ static int config_cb (void *user, const char *section, const char *name,
             opt->hpad_gpio = xstrdup (value);
         } else if (!strcmp (name, "debounce"))
             opt->hpad_debounce = strtod (value, NULL);
+    } else if (!strcmp (section, "guide")) {
+        if (!strcmp (name, "gpio")) {
+            if (opt->guide_gpio)
+                free (opt->guide_gpio);
+            opt->guide_gpio = xstrdup (value);
+        } else if (!strcmp (name, "debounce"))
+            opt->guide_debounce = strtod (value, NULL);
     } else if (!strcmp (section, "sockets")) {
         if (!strcmp (name, "req_bind")) {
             if (opt->req_bind_uri)

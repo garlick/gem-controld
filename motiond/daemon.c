@@ -55,6 +55,7 @@
 
 #include "motion.h"
 #include "hpad.h"
+#include "guide.h"
 
 const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
@@ -66,6 +67,7 @@ char *prog = "";
 typedef struct {
     opt_t opt;
     hpad_t hpad;
+    guide_t *guide;
     motion_t t, d, f;
     zsock_t *zreq;
     zsock_t *zpub;
@@ -83,6 +85,7 @@ int init_origin (ctx_t *ctx);
 int init_stopped (ctx_t *ctx);
 
 void hpad_cb (hpad_t h, void *arg);
+void guide_cb (guide_t *g, void *arg);
 void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
 void pub_cb (struct ev_loop *loop, ev_timer *w, int revents);
 
@@ -164,6 +167,8 @@ int main (int argc, char *argv[])
         usage ();
     if (!ctx.opt.hpad_gpio)
         msg_exit ("no hpad_gpio was configured");
+    if (!ctx.opt.guide_gpio)
+        msg_exit ("no guide_gpio was configured");
     if (!ctx.opt.req_bind_uri)
         msg_exit ("no req_bind_uri was configured");
     if (!ctx.opt.pub_bind_uri)
@@ -185,6 +190,12 @@ int main (int argc, char *argv[])
                    hpad_cb, &ctx) < 0)
         err_exit ("hpad_init");
     hpad_start (ctx.loop, ctx.hpad);
+
+    ctx.guide = guide_new ();
+    if (guide_init (ctx.guide, ctx.opt.guide_gpio, ctx.opt.guide_debounce,
+                   guide_cb, &ctx) < 0)
+        err_exit ("guide_init");
+    guide_start (ctx.loop, ctx.guide);
 
     setenv ("ZSYS_LINGER", "10", 1);
     if (!(ctx.zreq = zsock_new_router (ctx.opt.req_bind_uri)))
@@ -590,6 +601,17 @@ void hpad_cb (hpad_t h, void *arg)
             ctx->stopped = !ctx->stopped;
             break;
     }
+}
+
+void guide_cb (guide_t *g, void *arg)
+{
+    ctx_t *ctx = arg;
+    int val;
+
+    if ((val = guide_read (g)) < 0)
+        err_exit ("guide");
+    if (ctx->opt.debug)
+        msg ("guide: %d", val);
 }
 
 /* Return position in microns from controller steps.
