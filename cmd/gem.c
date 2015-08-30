@@ -138,16 +138,16 @@ int main (int argc, char *argv[])
                 usage ();
         }
     }
-    if (!ctx.opt.req_uri)
-        msg_exit ("no req uri was configured");
+    if (!ctx.opt.req_connect_uri)
+        msg_exit ("no req_connect_uri was configured");
     if (optind == argc)
         usage ();
     if (!(op = op_lookup (argv[optind++])))
         usage ();
 
     setenv ("ZSYS_LINGER", "10", 1);
-    if (!(ctx.zreq = zsock_new_dealer (ctx.opt.req_uri)))
-        err_exit ("zsock_new_req %s", ctx.opt.req_uri);
+    if (!(ctx.zreq = zsock_new_dealer (ctx.opt.req_connect_uri)))
+        err_exit ("zsock_new_req %s", ctx.opt.req_connect_uri);
     zsys_handler_set (NULL); /* disable zeromq signal handling */
 
     op->fun (&ctx, argc - optind, argv + optind);
@@ -412,8 +412,8 @@ void op_plot (ctx_t *ctx, int ac, char **av)
         msg ("position takes no arguments");
         goto done;
     }
-    if (!(zsub = zsock_new_sub (ctx->opt.pub_uri, NULL)))
-        err_exit ("zsock_new_sub %s", ctx->opt.pub_uri);
+    if (!(zsub = zsock_new_sub (ctx->opt.pub_connect_uri, NULL)))
+        err_exit ("zsock_new_sub %s", ctx->opt.pub_connect_uri);
     zsock_set_subscribe (zsub, "");
     if (!(p = popen ("gnuplot", "w"))) {
         err ("popen gnuplot");

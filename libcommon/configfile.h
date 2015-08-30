@@ -26,8 +26,10 @@ typedef struct {
     bool soft_init;
     char *hpad_gpio;
     double hpad_debounce;
-    char *req_uri;
-    char *pub_uri;
+    char *req_bind_uri;
+    char *pub_bind_uri;
+    char *req_connect_uri;
+    char *pub_connect_uri;
 } opt_t;
 
 void configfile_init (const char *filename, opt_t *opt);

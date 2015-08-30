@@ -164,8 +164,10 @@ int main (int argc, char *argv[])
         usage ();
     if (!ctx.opt.hpad_gpio)
         msg_exit ("no hpad_gpio was configured");
-    if (!ctx.opt.req_uri)
-        msg_exit ("no req uri was configured");
+    if (!ctx.opt.req_bind_uri)
+        msg_exit ("no req_bind_uri was configured");
+    if (!ctx.opt.pub_bind_uri)
+        msg_exit ("no pub_bind_uri was configured");
 
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
@@ -185,15 +187,15 @@ int main (int argc, char *argv[])
     hpad_start (ctx.loop, ctx.hpad);
 
     setenv ("ZSYS_LINGER", "10", 1);
-    if (!(ctx.zreq = zsock_new_router (ctx.opt.req_uri)))
-        err_exit ("zsock_new_router %s", ctx.opt.req_uri);
+    if (!(ctx.zreq = zsock_new_router (ctx.opt.req_bind_uri)))
+        err_exit ("zsock_new_router %s", ctx.opt.req_bind_uri);
     if (ev_zmq_init (&ctx.req_watcher, zreq_cb,
                      zsock_resolve (ctx.zreq), EV_READ) < 0)
         err_exit ("ev_zmq_init");
     ev_zmq_start (ctx.loop, &ctx.req_watcher);
 
-    if (!(ctx.zpub = zsock_new_pub (ctx.opt.pub_uri)))
-        err_exit ("zsock_new_pub %s", ctx.opt.pub_uri);
+    if (!(ctx.zpub = zsock_new_pub (ctx.opt.pub_bind_uri)))
+        err_exit ("zsock_new_pub %s", ctx.opt.pub_bind_uri);
 
     ev_timer_init (&ctx.pub_w, pub_cb, pub_slow, pub_slow);
     ev_timer_start (ctx.loop, &ctx.pub_w);
