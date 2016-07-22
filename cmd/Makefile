@@ -1,11 +1,12 @@
 include ../Makefile.inc
 
-CFLAGS = -Wall -D_GNU_SOURCE=1 -I$(abs_topdir) \
+CFLAGS += -Wall -D_GNU_SOURCE=1 -I$(abs_topdir) \
 	-DPOSITION_GP=\"$(prefix)/etc/gem-position.gp\"
-LIBS =  -L$(abs_topdir)/libcommon -lcommon \
+	$(ZMQ_CFLAGS)
+LIBS +=  -L$(abs_topdir)/libcommon -lcommon \
 	-L$(abs_topdir)/libini -lini \
 	-L$(abs_topdir)/libutil -lutil \
-	-lczmq -lzmq -lpthread -lev -lm -lrt
+	$(ZMQ_LIBS) -lpthread -lev -lm -lrt
 
 all: gem
 
