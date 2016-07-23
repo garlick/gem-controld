@@ -30,15 +30,15 @@
         __overlay__ {
             gem_ra_uart: pinmux_gem_ra_uart {
                 pinctrl-single,pins = <
-                    0x184 0x00             // P9.24 mode0 output (tx) 
-                    0x180 0x20             // P9.26 mode0 input (rx) 
+                    0x184 0x00             // P9.24 mode0 output (tx)
+                    0x180 0x20             // P9.26 mode0 input (rx)
                 >;
             };
         };
     };
 
     fragment@1 {
-        target = <&uart2>; // really uart1
+        target = <&uart1>;
         __overlay__ {
             status = "okay";
             pinctrl-names = "default";
@@ -53,15 +53,15 @@
         __overlay__ {
             gem_dec_uart: pinmux_gem_dec_uart {
                 pinctrl-single,pins = <
-                    0x154 0x01             // P9.21 mode1 output (tx) 
-                    0x150 0x21             // P9.22 mode1 input (rx) 
+                    0x154 0x01             // P9.21 mode1 output (tx)
+                    0x150 0x21             // P9.22 mode1 input (rx)
                 >;
             };
         };
     };
 
     fragment@3 {
-        target = <&uart3>; // really uart2
+        target = <&uart2>;
         __overlay__ {
             status = "okay";
             pinctrl-names = "default";
@@ -76,15 +76,15 @@
         __overlay__ {
             gem_focus_uart: pinmux_gem_focus_uart {
                 pinctrl-single,pins = <
-                    0x074 0x06             // P9.13 mode6 output (tx) 
-                    0x070 0x26             // P9.11 mode6 input (rx) 
+                    0x074 0x06             // P9.13 mode6 output (tx)
+                    0x070 0x26             // P9.11 mode6 input (rx)
                 >;
             };
         };
     };
 
     fragment@5 {
-        target = <&uart5>; // really uart4
+        target = <&uart4>;
         __overlay__ {
             status = "okay";
             pinctrl-names = "default";
@@ -108,7 +108,7 @@
             };
         };
     };
- 
+
     fragment@7 {
         target = <&ocp>;
         __overlay__ {
@@ -136,7 +136,7 @@
             };
         };
     };
- 
+
     fragment@9 {
         target = <&ocp>;
         __overlay__ {
