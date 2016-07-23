@@ -1,7 +1,8 @@
 include ../Makefile.inc
 
-CFLAGS = -I$(abs_topdir) -DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
-LIBS = -L$(abs_topdir)/libutil -lutil
+CFLAGS = -I$(abs_topdir) $(ZMQ_CFLAGS) \
+	-DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
+LIBS = -L$(abs_topdir)/libutil -lutil $(ZMQ_LIBS)
 
 OBJS = configfile.o gmsg.o
 
