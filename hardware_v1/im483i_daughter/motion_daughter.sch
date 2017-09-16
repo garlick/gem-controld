@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="7.6.0">
+<eagle version="7.7.0">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
@@ -5468,11 +5468,11 @@ Source: 3M</description>
 <part name="OUTPUT3" library="led" deviceset="LED" device="3MM"/>
 <part name="MOVE" library="led" deviceset="LED" device="3MM"/>
 <part name="FAULT" library="led" deviceset="LED" device="3MM"/>
-<part name="R1" library="resistor" deviceset="R-US_" device="0207/7" value="220"/>
-<part name="R2" library="resistor" deviceset="R-US_" device="0207/7" value="47"/>
-<part name="R3" library="resistor" deviceset="R-US_" device="0207/7" value="220"/>
-<part name="R4" library="resistor" deviceset="R-US_" device="0207/7" value="47"/>
-<part name="R5" library="resistor" deviceset="R-US_" device="0207/7" value="220"/>
+<part name="R1" library="resistor" deviceset="R-US_" device="0207/7" value="970"/>
+<part name="R2" library="resistor" deviceset="R-US_" device="0207/7" value="470"/>
+<part name="R3" library="resistor" deviceset="R-US_" device="0207/7" value="970"/>
+<part name="R4" library="resistor" deviceset="R-US_" device="0207/7" value="470"/>
+<part name="R5" library="resistor" deviceset="R-US_" device="0207/7" value="970"/>
 <part name="SUPPLY1" library="supply2" deviceset="VCC" device=""/>
 <part name="SUPPLY2" library="supply2" deviceset="VCC" device=""/>
 <part name="SUPPLY3" library="supply2" deviceset="GND" device=""/>
