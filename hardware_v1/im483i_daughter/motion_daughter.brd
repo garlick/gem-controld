@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!DOCTYPE eagle SYSTEM "eagle.dtd">
-<eagle version="7.6.0">
+<eagle version="7.7.0">
 <drawing>
 <settings>
 <setting alwaysvectorfont="no"/>
@@ -1619,11 +1619,11 @@ Please make sure your boards conform to these design rules.</description>
 <attribute name="NAME" x="13.741" y="4.915" size="1.27" layer="25" ratio="10"/>
 <attribute name="VALUE" x="14.209" y="6.415" size="1.27" layer="27" ratio="10" rot="R270"/>
 </element>
-<element name="R1" library="resistor" package="0207/7" value="220" x="33.56" y="61.82"/>
-<element name="R2" library="resistor" package="0207/7" value="47" x="33.56" y="55.2"/>
-<element name="R3" library="resistor" package="0207/7" value="220" x="33.56" y="48.58"/>
-<element name="R4" library="resistor" package="0207/7" value="47" x="33.56" y="14.94"/>
-<element name="R5" library="resistor" package="0207/7" value="220" x="33.56" y="8.32"/>
+<element name="R1" library="resistor" package="0207/7" value="970" x="33.56" y="61.82"/>
+<element name="R2" library="resistor" package="0207/7" value="470" x="33.56" y="55.2"/>
+<element name="R3" library="resistor" package="0207/7" value="970" x="33.56" y="48.58"/>
+<element name="R4" library="resistor" package="0207/7" value="470" x="33.56" y="14.94"/>
+<element name="R5" library="resistor" package="0207/7" value="970" x="33.56" y="8.32"/>
 </elements>
 <signals>
 <signal name="N$1">
