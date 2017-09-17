@@ -119,24 +119,6 @@ static int config_cb (void *user, const char *section, const char *name,
             opt->guide_gpio = xstrdup (value);
         } else if (!strcmp (name, "debounce"))
             opt->guide_debounce = strtod (value, NULL);
-    } else if (!strcmp (section, "sockets")) {
-        if (!strcmp (name, "req_bind")) {
-            if (opt->req_bind_uri)
-                free (opt->req_bind_uri);
-            opt->req_bind_uri = xstrdup (value);
-        } else if (!strcmp (name, "req_connect")) {
-            if (opt->req_connect_uri)
-                free (opt->req_connect_uri);
-            opt->req_connect_uri = xstrdup (value);
-        } else if (!strcmp (name, "pub_bind")) {
-            if (opt->pub_bind_uri)
-                free (opt->pub_bind_uri);
-            opt->pub_bind_uri = xstrdup (value);
-        } else if (!strcmp (name, "pub_connect")) {
-            if (opt->pub_connect_uri)
-                free (opt->pub_connect_uri);
-            opt->pub_connect_uri = xstrdup (value);
-        }
     }
     return rc;
 }

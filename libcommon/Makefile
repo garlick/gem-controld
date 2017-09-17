@@ -1,10 +1,10 @@
 include ../Makefile.inc
 
-CFLAGS = -I$(abs_topdir) $(ZMQ_CFLAGS) \
+CFLAGS = -I$(abs_topdir) \
 	-DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
 LIBS = -L$(abs_topdir)/libutil -lutil $(ZMQ_LIBS)
 
-OBJS = configfile.o gmsg.o
+OBJS = configfile.o
 
 all: libcommon.a
 

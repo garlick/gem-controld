@@ -28,10 +28,6 @@ typedef struct {
     double hpad_debounce;
     char *guide_gpio;
     double guide_debounce;
-    char *req_bind_uri;
-    char *pub_bind_uri;
-    char *req_connect_uri;
-    char *pub_connect_uri;
 } opt_t;
 
 void configfile_init (const char *filename, opt_t *opt);

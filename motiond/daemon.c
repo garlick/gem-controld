@@ -39,16 +39,13 @@
 #include <string.h>
 #include <pwd.h>
 #include <ev.h>
-#include <zmq.h>
-#include <czmq.h>
 #include <math.h>
+#include <assert.h>
 
 #include "libutil/log.h"
 #include "libutil/xzmalloc.h"
 #include "libutil/gpio.h"
-#include "libutil/ev_zmq.h"
 #include "libcommon/configfile.h"
-#include "libcommon/gmsg.h"
 
 #include "motion.h"
 #include "hpad.h"
@@ -66,11 +63,7 @@ typedef struct {
     hpad_t hpad;
     guide_t *guide;
     motion_t t, d, f;
-    zsock_t *zreq;
-    zsock_t *zpub;
     struct ev_loop *loop;
-    ev_zmq req_watcher;
-    ev_timer pub_w;
     bool stopped;
     bool zeroed;
 } ctx_t;
@@ -82,8 +75,6 @@ int init_stopped (ctx_t *ctx);
 
 void hpad_cb (hpad_t h, void *arg);
 void guide_cb (guide_t *g, void *arg);
-void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents);
-void pub_cb (struct ev_loop *loop, ev_timer *w, int revents);
 
 int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
 double controller_fromarcsec (opt_axis_t *axis, double arcsec);
@@ -164,10 +155,6 @@ int main (int argc, char *argv[])
         msg_exit ("no hpad_gpio was configured");
     if (!ctx.opt.guide_gpio)
         msg_exit ("no guide_gpio was configured");
-    if (!ctx.opt.req_bind_uri)
-        msg_exit ("no req_bind_uri was configured");
-    if (!ctx.opt.pub_bind_uri)
-        msg_exit ("no pub_bind_uri was configured");
 
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
@@ -191,22 +178,6 @@ int main (int argc, char *argv[])
         err_exit ("guide_init");
     guide_start (ctx.loop, ctx.guide);
 
-    setenv ("ZSYS_LINGER", "10", 1);
-    if (!(ctx.zreq = zsock_new_router (ctx.opt.req_bind_uri)))
-        err_exit ("zsock_new_router %s", ctx.opt.req_bind_uri);
-    if (ev_zmq_init (&ctx.req_watcher, zreq_cb,
-                     zsock_resolve (ctx.zreq), EV_READ) < 0)
-        err_exit ("ev_zmq_init");
-    ev_zmq_start (ctx.loop, &ctx.req_watcher);
-
-    if (!(ctx.zpub = zsock_new_pub (ctx.opt.pub_bind_uri)))
-        err_exit ("zsock_new_pub %s", ctx.opt.pub_bind_uri);
-
-    ev_timer_init (&ctx.pub_w, pub_cb, pub_slow, pub_slow);
-    ev_timer_start (ctx.loop, &ctx.pub_w);
-
-    zsys_handler_set (NULL); /* disable zeromq signal handling */
-
     ev_run (ctx.loop, 0);
     ev_loop_destroy (ctx.loop);
 
@@ -220,199 +191,7 @@ int main (int argc, char *argv[])
     if (ctx.f)
         motion_fini (ctx.f);
 
-    zsock_destroy (&ctx.zreq);
-
     return 0;
-}
-
-int update_position_msg (ctx_t *ctx, gmsg_t g, bool *moving)
-{
-    double x, y;
-    uint8_t a, b;
-    uint32_t flags = 0;
-    int rc = -1;
-
-    assert (ctx->zeroed == true);
-
-    if (motion_get_position (ctx->t, &x) < 0)
-        goto done;
-    if (motion_get_position (ctx->d, &y) < 0)
-        goto done;
-    double t = controller_toarcsec (&ctx->opt.t, x);
-    double d = controller_toarcsec (&ctx->opt.d, y);
-    if (motion_get_status (ctx->t, &a) < 0)
-        goto done;
-    if (motion_get_status (ctx->d, &b) < 0)
-        goto done;
-    if ((a & MOTION_STATUS_TRACKING))
-        flags |= FLAG_T_TRACKING;
-    if ((a & MOTION_STATUS_MOVING))
-        flags |= FLAG_T_MOVING;
-    if ((b & MOTION_STATUS_TRACKING))
-        flags |= FLAG_D_TRACKING;
-    if ((b & MOTION_STATUS_MOVING))
-        flags |= FLAG_D_MOVING;
-    if (gmsg_set_flags (g, flags) < 0)
-        goto done;
-    if (gmsg_set_arg1 (g, (int32_t)(1E2*t)) < 0)
-        goto done;
-    if (gmsg_set_arg2 (g, (int32_t)(1E2*d)) < 0)
-        goto done;
-    if (moving)
-	*moving = ((a & MOTION_STATUS_MOVING) || (b & MOTION_STATUS_MOVING));
-    rc = 0;
-done:
-    return rc;
-}
-
-void pub_cb (struct ev_loop *loop, ev_timer *w, int revents)
-{
-    ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, pub_w));
-    gmsg_t g = NULL;
-    bool moving;
-
-    if (!ctx->zeroed)
-        goto done;
-    if (!(g = gmsg_create (OP_POSITION)))
-        goto done;
-    if (update_position_msg (ctx, g, &moving) < 0)
-        goto done;
-    if (gmsg_send (ctx->zpub, g) < 0)
-        goto done;
-    w->repeat = moving ? pub_fast : pub_slow;
-done:
-    gmsg_destroy (&g);
-}
-
-void zreq_cb (struct ev_loop *loop, ev_zmq *w, int revents)
-{
-    ctx_t *ctx = (ctx_t *)((char *)w - offsetof (ctx_t, req_watcher));
-    int rc = -1;
-    gmsg_t g;
-    uint8_t op;
-
-    if (!(g = gmsg_recv (ctx->zreq))) {
-        err ("gmsg_recv");
-        goto done_noreply;
-    }
-
-    if (ctx->opt.debug)
-        gmsg_dump (stderr, g, "recv");
-    if (gmsg_get_op (g, &op) < 0)
-        goto done;
-    switch (op) {
-        case OP_POSITION: {
-            if (!ctx->zeroed) {
-                errno = EINVAL;
-                goto done;
-            }
-            if (update_position_msg (ctx, g, NULL) < 0)
-                goto done;
-            rc = 0;
-            break;
-        }
-        case OP_STOP: {
-            if (motion_stop (ctx->t) < 0 || motion_stop (ctx->d) < 0)
-                goto done;
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            ctx->stopped = true;
-            rc = 0;
-            break;
-        }
-        case OP_TRACK: {
-            uint32_t flags;
-            int vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
-            int vy = 0;
-            if (gmsg_get_flags (g, &flags) < 0)
-                goto done;
-            if ((flags & FLAG_ARG1)) {
-                int32_t arg;
-                if (gmsg_get_arg1 (g, &arg) < 0)
-                    goto done;
-                vx = controller_vfromarcsec (&ctx->opt.t, 1E-2*arg);
-            }
-            if ((flags & FLAG_ARG2)) {
-                int32_t arg;
-                if (gmsg_get_arg2 (g, &arg) < 0)
-                    goto done;
-                vy = controller_vfromarcsec (&ctx->opt.d, 1E-2*arg);
-            }
-            if (motion_set_velocity (ctx->t, vx) < 0)
-                goto done;
-            if (motion_set_velocity (ctx->d, vy) < 0)
-                goto done;
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            ctx->stopped = false;
-            rc = 0;
-            break;
-        }
-        case OP_ORIGIN: {
-            if (set_origin (ctx) < 0)
-                goto done;
-            rc = 0;
-            break;
-        }
-        case OP_GOTO: {
-            int32_t arg1, arg2;
-            double t, d;
-            if (gmsg_get_arg1 (g, &arg1) < 0)
-                goto done;
-            if (gmsg_get_arg2 (g, &arg2) < 0)
-                goto done;
-            t = 1E-2*arg1;
-            d = 1E-2*arg2;
-            if (!ctx->zeroed || !safeposition (ctx, t, d)) {
-                errno = EINVAL;
-                goto done;
-            }
-            if (motion_inprogress (ctx)) {
-                errno = EAGAIN;
-                goto done;
-            }
-            if (start_goto (ctx, t, d) < 0)
-                goto done;
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            ctx->stopped = true;
-            rc = 0;
-            break;
-        }
-        case OP_PARK: {
-            double t = ctx->opt.t.park;
-            double d = ctx->opt.d.park;
-            if (!ctx->zeroed || !safeposition (ctx, t, d)) {
-                errno = EINVAL;
-                goto done;
-            }
-            if (motion_inprogress (ctx)) {
-                errno = EAGAIN;
-                goto done;
-            }
-            if (start_goto (ctx, t, d) < 0)
-                goto done;
-            if (gmsg_set_flags (g, 0) < 0)
-                goto done;
-            ctx->stopped = true;
-            rc = 0;
-            break;
-        }
-    }
-done:
-    if (rc != 0 && gmsg_set_error (g, errno) < 0) {
-        err ("gmsg_set_error");
-        goto done_noreply;
-    }
-    if (ctx->opt.debug)
-        gmsg_dump (stderr, g, "send");
-    if (gmsg_send (ctx->zreq, g) < 0) {
-        err ("gmsg_send");
-        goto done_noreply;
-    }
-done_noreply:
-    gmsg_destroy (&g);
-    return;
 }
 
 int init_stopped (ctx_t *ctx)
@@ -589,8 +368,6 @@ int start_goto (ctx_t *ctx, double t, double d)
         goto done;
     if (motion_set_position (ctx->d, y) < 0)
         goto done;
-    ctx->pub_w.repeat = pub_fast;
-    ev_timer_again (ctx->loop, &ctx->pub_w);
     ctx->stopped = true; /* client should restart tracking after goto */
     rc = 0;
 done:

@@ -2,7 +2,7 @@ include ../Makefile.inc
 
 CFLAGS = $(ZMQ_CFLAGS)
 
-OBJS = log.o xzmalloc.o gpio.o ev_zmq.o
+OBJS = log.o xzmalloc.o gpio.o
 
 all: libutil.a
 
