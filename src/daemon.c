@@ -69,9 +69,9 @@ typedef struct {
 } ctx_t;
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
-int set_origin (ctx_t *ctx);
-int init_origin (ctx_t *ctx);
-int init_stopped (ctx_t *ctx);
+int set_origin (struct motion *t, struct motion *d);
+int init_origin (struct motion *t, struct motion *d);
+int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
@@ -83,13 +83,6 @@ double controller_toarcsec (struct config_axis *axis, double steps);
 int controller_vfrommicrons (struct config_axis *axis, double microns_persec);
 double controller_frommicrons (struct config_axis *axis, double microns);
 double controller_tomicrons (struct config_axis *axis, double steps);
-
-
-bool safeposition (ctx_t *ctx, double t, double d);
-
-bool motion_inprogress (ctx_t *ctx);
-
-int start_goto (ctx_t *ctx, double t, double d);
 
 #define OPTIONS "+c:hdf"
 static const struct option longopts[] = {
@@ -161,9 +154,9 @@ int main (int argc, char *argv[])
 
     ctx.t = init_axis (&ctx.opt.t, "t", flags);
     ctx.d = init_axis (&ctx.opt.d, "d", flags);
-    if (init_origin (&ctx) < 0)
+    if ((ctx.zeroed = init_origin (ctx.t, ctx.d)) < 0)
         err_exit ("init_origin");
-    if (init_stopped (&ctx) < 0)
+    if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
         err_exit ("init_stopped");
 
     ctx.hpad = hpad_new ();
@@ -192,40 +185,36 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int init_stopped (ctx_t *ctx)
+int init_stopped (struct motion *t, struct motion *d)
 {
     uint8_t a, b;
-    if (motion_get_status (ctx->t, &a) < 0)
+    if (motion_get_status (t, &a) < 0)
         return -1;
-    if (motion_get_status (ctx->d, &b) < 0)
+    if (motion_get_status (d, &b) < 0)
         return -1;
-    ctx->stopped = (a == 0 && b == 0);
-    return 0;
+    return (a == 0 && b == 0);
 }
 
-int init_origin (ctx_t *ctx)
+int init_origin (struct motion *t, struct motion *d)
 {
     uint8_t a, b;
-    if (motion_get_port (ctx->t, &a) < 0)
+    if (motion_get_port (t, &a) < 0)
         return -1;
-    if (motion_get_port (ctx->d, &b) < 0)
+    if (motion_get_port (d, &b) < 0)
         return -1;
-    ctx->zeroed = ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
-    return 0;
+    return ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
 }
 
-int set_origin (ctx_t *ctx)
+int set_origin (struct motion *t, struct motion *d)
 {
-    if (motion_set_origin (ctx->t) < 0)
+    if (motion_set_origin (t) < 0)
         return -1;
-    if (motion_set_origin (ctx->d) < 0)
+    if (motion_set_origin (d) < 0)
         return -1;
-    if (motion_set_port (ctx->t, GREEN_LED_MASK) < 0)
+    if (motion_set_port (t, GREEN_LED_MASK) < 0)
         return -1;
-    if (motion_set_port (ctx->d, GREEN_LED_MASK) < 0)
+    if (motion_set_port (d, GREEN_LED_MASK) < 0)
         return -1;
-    ctx->stopped = true;
-    ctx->zeroed = true;
     return 0;
 }
 
@@ -306,8 +295,10 @@ void hpad_cb (struct hpad *h, void *arg)
             break;
         }
         case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
-            if (set_origin (ctx) < 0)
+            if (set_origin (ctx->t, ctx->d) < 0)
                 err_exit ("set origin");
+            ctx->stopped = true;
+            ctx->zeroed = true;
             break;
         case HPAD_KEY_M1: /* unused */
             break;
@@ -352,42 +343,6 @@ int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec)
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);
     return lrint (steps_persec);
-}
-
-int start_goto (ctx_t *ctx, double t, double d)
-{
-    assert (ctx->zeroed == true);
-
-    double x = controller_fromarcsec (&ctx->opt.t, t);
-    double y = controller_fromarcsec (&ctx->opt.d, d);
-    int rc = -1;
-
-    if (motion_set_position (ctx->t, x) < 0)
-        goto done;
-    if (motion_set_position (ctx->d, y) < 0)
-        goto done;
-    ctx->stopped = true; /* client should restart tracking after goto */
-    rc = 0;
-done:
-    return rc;
-}
-
-bool motion_inprogress (ctx_t *ctx)
-{
-    uint8_t s;
-
-    if ((motion_get_status (ctx->t, &s) == 0 && (s & MOTION_STATUS_MOVING))
-     || (motion_get_status (ctx->d, &s) == 0 && (s & MOTION_STATUS_MOVING)))
-        return true;
-    return false;
-}
-
-bool safeposition (ctx_t *ctx, double t, double d)
-{
-    if (t < ctx->opt.t.low_limit || t > ctx->opt.t.high_limit
-     || d < ctx->opt.d.low_limit || d > ctx->opt.d.high_limit)
-        return false;
-    return true;
 }
 
 /*
