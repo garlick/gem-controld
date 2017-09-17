@@ -35,7 +35,7 @@
 static int config_cb (void *user, const char *section, const char *name,
                       const char *value);
 
-void configfile_init (const char *filename, opt_t *opt)
+void configfile_init (const char *filename, struct config *opt)
 {
     if (!filename)
         filename = CONFIG_FILENAME;
@@ -48,7 +48,7 @@ void configfile_init (const char *filename, opt_t *opt)
         msg_exit ("%s::%d: parse error", filename, rc);
 };
 
-static int config_axis (opt_axis_t *a, const char *name, const char *value)
+static int config_axis (struct config_axis *a, const char *name, const char *value)
 {
     int rc = 1; /* 0 = error */
     if (!strcmp (name, "device")) {
@@ -91,7 +91,7 @@ static int config_axis (opt_axis_t *a, const char *name, const char *value)
 static int config_cb (void *user, const char *section, const char *name,
                       const char *value)
 {
-    opt_t *opt = user;
+    struct config *opt = user;
     int rc = 1; /* 0 = error */
 
     if (!strcmp (section, "general")) {
@@ -105,8 +105,6 @@ static int config_cb (void *user, const char *section, const char *name,
         rc = config_axis (&opt->t, name, value);
     else if (!strcmp (section, "d_axis"))
         rc = config_axis (&opt->d, name, value);
-    else if (!strcmp (section, "f_axis"))
-        rc = config_axis (&opt->f, name, value);
     else if (!strcmp (section, "hpad")) {
         if (!strcmp (name, "gpio")) {
             if (opt->hpad_gpio)

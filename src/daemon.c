@@ -58,7 +58,7 @@ const double pub_fast = 0.5; /* sec */
 char *prog = "";
 
 typedef struct {
-    opt_t opt;
+    struct config opt;
     struct hpad *hpad;
     struct guide *guide;
     struct motion *t;
@@ -68,7 +68,7 @@ typedef struct {
     bool zeroed;
 } ctx_t;
 
-struct motion *init_axis (opt_axis_t *a, const char *name, int flags);
+struct motion *init_axis (struct config_axis *a, const char *name, int flags);
 int set_origin (ctx_t *ctx);
 int init_origin (ctx_t *ctx);
 int init_stopped (ctx_t *ctx);
@@ -76,13 +76,13 @@ int init_stopped (ctx_t *ctx);
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
 
-int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
-double controller_fromarcsec (opt_axis_t *axis, double arcsec);
-double controller_toarcsec (opt_axis_t *axis, double steps);
+int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
+double controller_fromarcsec (struct config_axis *axis, double arcsec);
+double controller_toarcsec (struct config_axis *axis, double steps);
 
-int controller_vfrommicrons (opt_axis_t *axis, double microns_persec);
-double controller_frommicrons (opt_axis_t *axis, double microns);
-double controller_tomicrons (opt_axis_t *axis, double steps);
+int controller_vfrommicrons (struct config_axis *axis, double microns_persec);
+double controller_frommicrons (struct config_axis *axis, double microns);
+double controller_tomicrons (struct config_axis *axis, double steps);
 
 
 bool safeposition (ctx_t *ctx, double t, double d);
@@ -229,7 +229,7 @@ int set_origin (ctx_t *ctx)
     return 0;
 }
 
-struct motion *init_axis (opt_axis_t *a, const char *name, int flags)
+struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 {
     struct motion *m;
     bool coldstart;
@@ -330,14 +330,14 @@ void guide_cb (struct guide *g, void *arg)
 
 /* Return position in arcsec from controller steps
  */
-double controller_toarcsec (opt_axis_t *axis, double steps)
+double controller_toarcsec (struct config_axis *axis, double steps)
 {
     return steps * (360.0*60*60) / axis->steps + axis->offset;
 }
 
 /* Calculate position in steps for motion controller from arcsec.
  */
-double controller_fromarcsec (opt_axis_t *axis, double arcsec)
+double controller_fromarcsec (struct config_axis *axis, double arcsec)
 {
     return (arcsec - axis->offset) * axis->steps / (360.0*60*60);
 }
@@ -345,7 +345,7 @@ double controller_fromarcsec (opt_axis_t *axis, double arcsec)
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
  * Take into account controller velocity scaling in 'auto' mode.
  */
-int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec)
+int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec)
 {
     double steps_persec = arcsec_persec * axis->steps / (360.0*60*60);
 
