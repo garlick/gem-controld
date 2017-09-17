@@ -61,13 +61,14 @@ typedef struct {
     opt_t opt;
     struct hpad *hpad;
     struct guide *guide;
-    motion_t t, d, f;
+    struct motion *t;
+    struct motion *d;
     struct ev_loop *loop;
     bool stopped;
     bool zeroed;
 } ctx_t;
 
-motion_t init_axis (opt_axis_t *a, const char *name, int flags);
+struct motion *init_axis (opt_axis_t *a, const char *name, int flags);
 int set_origin (ctx_t *ctx);
 int init_origin (ctx_t *ctx);
 int init_stopped (ctx_t *ctx);
@@ -187,8 +188,6 @@ int main (int argc, char *argv[])
         motion_fini (ctx.d);
     if (ctx.t)
         motion_fini (ctx.t);
-    if (ctx.f)
-        motion_fini (ctx.f);
 
     return 0;
 }
@@ -230,9 +229,9 @@ int set_origin (ctx_t *ctx)
     return 0;
 }
 
-motion_t init_axis (opt_axis_t *a, const char *name, int flags)
+struct motion *init_axis (opt_axis_t *a, const char *name, int flags)
 {
-    motion_t m;
+    struct motion *m;
     bool coldstart;
 
     if (!a->device)
