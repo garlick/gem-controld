@@ -24,10 +24,12 @@
 
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
-#include "libutil/xzmalloc.h"
-#include "libutil/log.h"
 #include "libini/ini.h"
+
+#include "xzmalloc.h"
+#include "log.h"
 #include "configfile.h"
 
 static int config_cb (void *user, const char *section, const char *name,

@@ -42,11 +42,10 @@
 #include <math.h>
 #include <assert.h>
 
-#include "libutil/log.h"
-#include "libutil/xzmalloc.h"
-#include "libutil/gpio.h"
-#include "libcommon/configfile.h"
-
+#include "log.h"
+#include "xzmalloc.h"
+#include "gpio.h"
+#include "configfile.h"
 #include "motion.h"
 #include "hpad.h"
 #include "guide.h"

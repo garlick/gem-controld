@@ -35,11 +35,11 @@
 #include <string.h>
 #include <ev.h>
 
-#include "libutil/log.h"
-#include "libutil/xzmalloc.h"
-#include "libutil/gpio.h"
+#include "log.h"
+#include "xzmalloc.h"
+#include "gpio.h"
 
-#include "guide.h"
+#include "hpad.h"
 
 typedef struct {
     int pin;
@@ -47,10 +47,10 @@ typedef struct {
     struct epoll_event e;
 } pin_t;
 
-struct guide_struct {
+struct hpad_struct {
     pin_t pins[4];
     int efd;
-    guide_cb_t cb;
+    hpad_cb_t cb;
     void *cb_arg;
     double debounce;
     int val;
@@ -58,40 +58,40 @@ struct guide_struct {
     ev_timer timer_w;
 };
 
-guide_t *guide_new (void)
+hpad_t hpad_new (void)
 {
-    guide_t *g = xzmalloc (sizeof (*g));
+    hpad_t h = xzmalloc (sizeof (*h));
     int i;
     for (i = 0; i < 4; i++)
-        g->pins[i].fd = -1;
-    g->efd = -1;
-    return g;
+        h->pins[i].fd = -1;
+    h->efd = -1;
+    return h;
 }
 
-void guide_destroy (guide_t *g)
+void hpad_destroy (hpad_t h)
 {
     int i;
-    if (g) {
-        if (g->efd != -1)
-            close (g->efd);
+    if (h) {
+        if (h->efd != -1)
+            close (h->efd);
         for (i = 0; i < 4; i++) {
-            pin_t *p = &g->pins[i];
+            pin_t *p = &h->pins[i];
             if (p->fd != -1) {
                 (void)close (p->fd);
                 (void)gpio_set_export (p->pin, false);
             }
         }
-        free (g);
+        free (h);
     }
 }
 
-int guide_read (guide_t *g)
+int hpad_read (hpad_t h)
 {
     int code = 0;
     int i;
 
     for (i = 0; i < 4; i++) {
-        pin_t *p = &g->pins[i];
+        pin_t *p = &h->pins[i];
         int val;
         if (gpio_read (p->fd, &val) < 0)
             return -1;
@@ -102,27 +102,25 @@ int guide_read (guide_t *g)
 
 static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    guide_t *g = (guide_t *)((char *)w
-               - offsetof (struct guide_struct, timer_w));
-    int val = guide_read (g);
-    if (val != g->val) {
-        g->val = val;
-        g->cb (g, g->cb_arg);
+    hpad_t h = (hpad_t)((char *)w - offsetof (struct hpad_struct, timer_w));
+    int val = hpad_read (h);
+    if (val != h->val) {
+        h->val = val;
+        h->cb (h, h->cb_arg);
     }
 }
 
 static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    guide_t *g = (guide_t *)((char *)w
-               - offsetof (struct guide_struct, io_w));
-    if (!ev_is_active (&g->timer_w)) {
-        ev_timer_set (&g->timer_w, g->debounce, 0.);
-        ev_timer_start (loop, &g->timer_w);
+    hpad_t h = (hpad_t)((char *)w - offsetof (struct hpad_struct, io_w));
+    if (!ev_is_active (&h->timer_w)) {
+        ev_timer_set (&h->timer_w, h->debounce, 0.);
+        ev_timer_start (loop, &h->timer_w);
     }
 }
 
-int guide_init (guide_t *g, const char *pins, double debounce,
-               guide_cb_t cb, void *arg)
+int hpad_init (hpad_t h, const char *pins, double debounce,
+               hpad_cb_t cb, void *arg)
 {
     int i, rc = -1;
     char *tok, *cpy = NULL;
@@ -131,12 +129,12 @@ int guide_init (guide_t *g, const char *pins, double debounce,
         errno = EINVAL;
         goto done;
     }
-    if ((g->efd = epoll_create (4)) < 0)    /* need this because libev */
+    if ((h->efd = epoll_create (4)) < 0)    /* need this because libev */
         goto done;                          /*   doesn't grok POLLPRI */
     cpy = xstrdup (pins);
     tok = strtok (cpy, ",");
     for (i = 0; i < 4; i++) {
-        pin_t *p = &g->pins[i];
+        pin_t *p = &h->pins[i];
         if (!tok) {
             errno = EINVAL;
             goto done;
@@ -152,16 +150,16 @@ int guide_init (guide_t *g, const char *pins, double debounce,
             goto done;
         p->e.data.fd = p->fd;
         p->e.events = EPOLLPRI;
-        if (epoll_ctl (g->efd, EPOLL_CTL_ADD, p->fd, &p->e) < 0)
+        if (epoll_ctl (h->efd, EPOLL_CTL_ADD, p->fd, &p->e) < 0)
             goto done;
         tok = strtok (NULL, ",");
     }
-    g->debounce = debounce;
-    g->cb = cb;
-    g->cb_arg = arg;
-    ev_io_init (&g->io_w, gpio_cb, g->efd, EV_READ);
-    ev_timer_init (&g->timer_w, timer_cb, g->debounce, 0.);
-    g->val = guide_read (g);
+    h->debounce = debounce;
+    h->cb = cb;
+    h->cb_arg = arg;
+    ev_io_init (&h->io_w, gpio_cb, h->efd, EV_READ);
+    ev_timer_init (&h->timer_w, timer_cb, h->debounce, 0.);
+    h->val = hpad_read (h);
     rc = 0;
 done:
     if (cpy)
@@ -169,15 +167,15 @@ done:
     return rc;
 }
 
-void guide_start (struct ev_loop *loop, guide_t *g)
+void hpad_start (struct ev_loop *loop, hpad_t h)
 {
-    ev_io_start (loop, &g->io_w);
+    ev_io_start (loop, &h->io_w);
 }
 
-void guide_stop (struct ev_loop *loop, guide_t *g)
+void hpad_stop (struct ev_loop *loop, hpad_t h)
 {
-    ev_io_stop (loop, &g->io_w);
-    ev_timer_stop (loop, &g->timer_w);
+    ev_io_stop (loop, &h->io_w);
+    ev_timer_stop (loop, &h->timer_w);
 }
 
 /*
