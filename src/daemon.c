@@ -57,7 +57,7 @@ const double pub_fast = 0.5; /* sec */
 
 char *prog = "";
 
-typedef struct {
+struct prog_context {
     struct config opt;
     struct hpad *hpad;
     struct guide *guide;
@@ -66,7 +66,7 @@ typedef struct {
     struct ev_loop *loop;
     bool stopped;
     bool zeroed;
-} ctx_t;
+};
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
 int set_origin (struct motion *t, struct motion *d);
@@ -107,7 +107,7 @@ static void usage (void)
 int main (int argc, char *argv[])
 {
     int ch;
-    ctx_t ctx;
+    struct prog_context ctx;
     char *config_filename = NULL;
     int flags = 0;
 
@@ -246,7 +246,7 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 
 void hpad_cb (struct hpad *h, void *arg)
 {
-    ctx_t *ctx = arg;
+    struct prog_context *ctx = arg;
     int val;
 
     if ((val = hpad_read (h)) < 0)
@@ -310,7 +310,7 @@ void hpad_cb (struct hpad *h, void *arg)
 
 void guide_cb (struct guide *g, void *arg)
 {
-    ctx_t *ctx = arg;
+    struct prog_context *ctx = arg;
     int val;
 
     if ((val = guide_read (g)) < 0)
