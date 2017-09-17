@@ -40,7 +40,6 @@ enum {
     OP_TRACK = 3,       /* start tracking (optional args) */
     OP_GOTO = 4,        /* slew to specified coordinates */
     OP_POSITION = 5,    /* get current position */
-    OP_FOCUS = 6,       /* change focus position */
 };
 
 /* Flags
@@ -50,9 +49,6 @@ enum {
     FLAG_ARG1         = 0x0002,     /* arg1 is valid */
     FLAG_ARG2         = 0x0004,     /* arg2 is valid */
     FLAG_ARG3         = 0x0008,     /* arg3 is valid */
-
-    FLAG_F_TRACKING   = 0x0040,     /* f axis moving at constant velocity */
-    FLAG_F_MOVING     = 0x0080,     /* f axis goto in progress */
 
     FLAG_T_TRACKING   = 0x0100,     /* t axis moving at constant velocity */
     FLAG_T_MOVING     = 0x0200,     /* t axis goto/park in progress */
