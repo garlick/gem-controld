@@ -1,4 +1,4 @@
-typedef struct {
+struct config_axis {
     char *device;
     int mode;
     int resolution;
@@ -15,12 +15,11 @@ typedef struct {
     int park;
     int high_limit;
     int low_limit;
-} opt_axis_t;
+};
 
-typedef struct {
-    opt_axis_t t;
-    opt_axis_t d;
-    opt_axis_t f;
+struct config {
+    struct config_axis t;
+    struct config_axis d;
     bool debug;
     bool no_motion;
     bool soft_init;
@@ -28,13 +27,9 @@ typedef struct {
     double hpad_debounce;
     char *guide_gpio;
     double guide_debounce;
-    char *req_bind_uri;
-    char *pub_bind_uri;
-    char *req_connect_uri;
-    char *pub_connect_uri;
 } opt_t;
 
-void configfile_init (const char *filename, opt_t *opt);
+void configfile_init (const char *filename, struct config *opt);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

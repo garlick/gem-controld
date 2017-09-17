@@ -39,7 +39,7 @@
 
 #include "motion.h"
 
-struct motion_struct {
+struct motion {
     int fd;
     char *devname;
     char *name;
@@ -87,7 +87,7 @@ static int dgetc (int fd)
  * using buf[size] as storage.  If there is a read error or buf overflow,
  * return NULL.
  */
-static char *mgets (motion_t m, char *buf, int size)
+static char *mgets (struct motion *m, char *buf, int size)
 {
     int c;
     int i = 0;
@@ -114,7 +114,7 @@ static char *mgets (motion_t m, char *buf, int size)
     return buf;
 }
 
-static int mputs (motion_t m, const char *s)
+static int mputs (struct motion *m, const char *s)
 {
     if (m->flags & MOTION_DEBUG) {
         char *cpy = toliteral (s);
@@ -124,7 +124,7 @@ static int mputs (motion_t m, const char *s)
     return dprintf (m->fd, "%s", s);
 }
 
-static int mprintf (motion_t m, const char *fmt, ...)
+static int mprintf (struct motion *m, const char *fmt, ...)
 {
     va_list ap;
     char *s = NULL;
@@ -141,7 +141,7 @@ static int mprintf (motion_t m, const char *fmt, ...)
 
 /* Send a \r, receive a #.
  */
-static int mping (motion_t m, int count)
+static int mping (struct motion *m, int count)
 {
     int i;
     char buf[max_cmdline];
@@ -160,7 +160,7 @@ done:
     return rc;
 }
 
-static void mdelay (motion_t m, int msec)
+static void mdelay (struct motion *m, int msec)
 {
     if (m->flags & MOTION_DEBUG)
         fprintf (stderr, "%s:delay %dms\n", m->name, msec);
@@ -169,7 +169,7 @@ static void mdelay (motion_t m, int msec)
 
 /* Send command + \r, receive back echoed command.
  */
-static int mcmd (motion_t m, const char *fmt, ...)
+static int mcmd (struct motion *m, const char *fmt, ...)
 {
     va_list ap;
     int rc = -1;
@@ -197,7 +197,7 @@ done:
 
 /* Open/configure the serial port
  */
-static int mopen (motion_t m)
+static int mopen (struct motion *m)
 {
     struct termios tio;
 
@@ -217,7 +217,7 @@ static int mopen (motion_t m)
 /* Cold start: send " \r", read 2 banner lines and "#".
  * Warm start: send " \r", read " #".
  */
-static int mhello (motion_t m, bool *coldstart)
+static int mhello (struct motion *m, bool *coldstart)
 {
     char buf[max_cmdline];
     int i;
@@ -240,7 +240,7 @@ static int mhello (motion_t m, bool *coldstart)
 
 /* Send ctrl-C to reset device, then delay while it comes out of reset.
  */
-static int mreset (motion_t m)
+static int mreset (struct motion *m)
 {
     if (mputs (m, "\003") < 0)
         return -1;
@@ -251,7 +251,7 @@ static int mreset (motion_t m)
 /* Examine configuration parameters (via debug output).
  * Assume two lines are returned (three if encoder option installed).
  */
-static int mexamine (motion_t m)
+static int mexamine (struct motion *m)
 {
     char buf[max_cmdline];
     int i;
@@ -265,10 +265,10 @@ static int mexamine (motion_t m)
     return 0;
 }
 
-motion_t motion_init (const char *devname, const char *name, int flags,
-                      bool *coldstart)
+struct motion *motion_init (const char *devname, const char *name, int flags,
+                            bool *coldstart)
 {
-    motion_t m;
+    struct motion *m;
     int saved_errno;
 
     if (!(m = malloc (sizeof (*m))) || !(m->devname = strdup (devname))
@@ -300,7 +300,7 @@ error:
     return NULL;
 }
 
-void motion_fini (motion_t m)
+void motion_fini (struct motion *m)
 {
     if (m) {
         if (m->fd >= 0) {
@@ -315,12 +315,12 @@ void motion_fini (motion_t m)
     }
 }
 
-const char *motion_name (motion_t m)
+const char *motion_name (struct motion *m)
 {
     return m->name;
 }
 
-int motion_set_resolution (motion_t m, int res)
+int motion_set_resolution (struct motion *m, int res)
 {
     if (res < 0 || res > 8) {
         errno = EINVAL;
@@ -329,7 +329,7 @@ int motion_set_resolution (motion_t m, int res)
     return mcmd (m, "D%d", res);
 }
 
-int motion_set_mode (motion_t m, int mode)
+int motion_set_mode (struct motion *m, int mode)
 {
     if (mode != 0 && mode != 1) {
         errno = EINVAL;
@@ -338,7 +338,7 @@ int motion_set_mode (motion_t m, int mode)
     return mcmd (m, "H%d", mode);
 }
 
-int motion_set_current (motion_t m, int hold, int run)
+int motion_set_current (struct motion *m, int hold, int run)
 {
     if (hold < 0 || hold > 100 || run < 0 || run > 100) {
         errno = EINVAL;
@@ -347,7 +347,7 @@ int motion_set_current (motion_t m, int hold, int run)
     return mcmd (m, "Y%d %d", hold, run);
 }
 
-int motion_set_acceleration (motion_t m, int accel, int decel)
+int motion_set_acceleration (struct motion *m, int accel, int decel)
 {
     if (accel < 0 || accel > 255 || decel < 0 || decel > 255) {
         errno = EINVAL;
@@ -356,7 +356,7 @@ int motion_set_acceleration (motion_t m, int accel, int decel)
     return mcmd (m, "K%d %d", accel, decel);
 }
 
-int motion_set_initial_velocity (motion_t m, int velocity)
+int motion_set_initial_velocity (struct motion *m, int velocity)
 {
     if (velocity < 20  || velocity > 20000) {
         errno = EINVAL;
@@ -365,7 +365,7 @@ int motion_set_initial_velocity (motion_t m, int velocity)
     return mcmd (m, "I%d", velocity);
 }
 
-int motion_set_final_velocity (motion_t m, int velocity)
+int motion_set_final_velocity (struct motion *m, int velocity)
 {
     if (velocity < 20  || velocity > 20000) {
         errno = EINVAL;
@@ -374,7 +374,7 @@ int motion_set_final_velocity (motion_t m, int velocity)
     return mcmd (m, "V%d", velocity);
 }
 
-int motion_set_velocity (motion_t m, int velocity)
+int motion_set_velocity (struct motion *m, int velocity)
 {
     if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {
         errno = EINVAL;
@@ -383,7 +383,7 @@ int motion_set_velocity (motion_t m, int velocity)
     return mcmd (m, "M%d", velocity);
 }
 
-int motion_get_position (motion_t m, double *position)
+int motion_get_position (struct motion *m, double *position)
 {
     char buf[max_cmdline];
     float pos;
@@ -398,7 +398,7 @@ int motion_get_position (motion_t m, double *position)
     return 0;
 }
 
-int motion_set_position (motion_t m, double position)
+int motion_set_position (struct motion *m, double position)
 {
     if (fabs (position) > 8388607.9) {
         errno = EINVAL;
@@ -407,7 +407,7 @@ int motion_set_position (motion_t m, double position)
     return mcmd (m, "R%+.2f", position);
 }
 
-int motion_get_status (motion_t m, uint8_t *status)
+int motion_get_status (struct motion *m, uint8_t *status)
 {
     char buf[max_cmdline];
     int s;
@@ -422,7 +422,7 @@ int motion_get_status (motion_t m, uint8_t *status)
     return 0;
 }
 
-int motion_set_index (motion_t m, double offset)
+int motion_set_index (struct motion *m, double offset)
 {
     if (fabs (offset) < 0.01 || fabs (offset) > 8388607.99) {
         errno = EINVAL;
@@ -431,17 +431,17 @@ int motion_set_index (motion_t m, double offset)
     return mcmd (m, "%+.2f", offset);
 }
 
-int motion_set_origin (motion_t m)
+int motion_set_origin (struct motion *m)
 {
     return mcmd (m, "O");
 }
 
-int motion_stop (motion_t m)
+int motion_stop (struct motion *m)
 {
     return mcmd (m, "@");
 }
 
-int motion_set_port (motion_t m, uint8_t val)
+int motion_set_port (struct motion *m, uint8_t val)
 {
     if (val & 0b11000111) {
         errno = EINVAL;
@@ -450,7 +450,7 @@ int motion_set_port (motion_t m, uint8_t val)
     return mcmd (m, "A%d", val);
 }
 
-int motion_get_port (motion_t m, uint8_t *val)
+int motion_get_port (struct motion *m, uint8_t *val)
 {
     char buf[max_cmdline];
     int v;

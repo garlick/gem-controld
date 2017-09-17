@@ -5,67 +5,67 @@ enum {
     MOTION_RESET = 0x02,    /* perform factory reset */
 };
 
-typedef struct motion_struct *motion_t;
+struct motion;
 
 /* Initialize communications with indexer on 'devname'.
  */
-motion_t motion_init (const char *devname, const char *name, int flags,
-                      bool *coldstart);
+struct motion *motion_init (const char *devname, const char *name, int flags,
+                            bool *coldstart);
 
 /* Disconnect from indexer, stopping motion if any.
  */
-void motion_fini (motion_t m);
+void motion_fini (struct motion *m);
 
-const char *motion_name (motion_t m);
+const char *motion_name (struct motion *m);
 
 /* Set microstep resolution (0:8)
  */
-int motion_set_resolution (motion_t m, int resolution);
+int motion_set_resolution (struct motion *m, int resolution);
 
 /* Set hold/run current limit in pct of max (0-100)
  */
-int motion_set_current (motion_t m, int hold, int run);
+int motion_set_current (struct motion *m, int hold, int run);
 
 /* Set acceleration/deceleration slope (0-255)
  */
-int motion_set_acceleration (motion_t m, int accel, int decel);
+int motion_set_acceleration (struct motion *m, int accel, int decel);
 
 /* Set resolution mode
  * 0=fixed, 1=auto
  */
-int motion_set_mode (motion_t m, int mode);
+int motion_set_mode (struct motion *m, int mode);
 
 /* Set initial velocity for ramp-up, 20:20000
  * In full steps per sec (auto mode), or pulses per sec (fixed mode).
  */
-int motion_set_initial_velocity (motion_t m, int velocity);
+int motion_set_initial_velocity (struct motion *m, int velocity);
 
 /* Set fnial velocity for ramp-up, 20:20000
  * In full steps per sec (auto mode), or pulses per sec (fixed mode).
  */
-int motion_set_final_velocity (motion_t m, int velocity);
+int motion_set_final_velocity (struct motion *m, int velocity);
 
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.
  */
-int motion_set_velocity (motion_t m, int velocity);
+int motion_set_velocity (struct motion *m, int velocity);
 
 /* Query current position.
  */
-int motion_get_position (motion_t m, double *position);
+int motion_get_position (struct motion *m, double *position);
 
 /* Slew to position relative to origin.
  */
-int motion_set_position (motion_t m, double position);
+int motion_set_position (struct motion *m, double position);
 
 /* Slew the to current position + offset.  Offset is in full steps, with
  * a resolution of 0.01 step.  Motor will ramp up and ramp down automatically.
  */
-int motion_set_index (motion_t m, double offset);
+int motion_set_index (struct motion *m, double offset);
 
 /* Execute a "soft stop" (with deceleration) on all motion.
  */
-int motion_stop (motion_t m);
+int motion_stop (struct motion *m);
 
 /* Read moving status.
  */
@@ -74,11 +74,11 @@ int motion_stop (motion_t m);
 #define MOTION_STATUS_HOMING    0x08
 #define MOTION_STATUS_HUNTING   0x10
 #define MOTION_STATUS_RAMPING   0x20
-int motion_get_status (motion_t m, uint8_t *status);
+int motion_get_status (struct motion *m, uint8_t *status);
 
 /* Set internal position counter to zero.
  */
-int motion_set_origin (motion_t m);
+int motion_set_origin (struct motion *m);
 
 /* Read 6-bit GPIO port.  Bits are:
  *  0 in-1
@@ -89,11 +89,11 @@ int motion_set_origin (motion_t m);
  *  5 out-3
  */
 #define GREEN_LED_MASK  (8)
-int motion_get_port (motion_t m, uint8_t *val);
+int motion_get_port (struct motion *m, uint8_t *val);
 
 /* Write 6-bit GPIO port.
  */
-int motion_set_port (motion_t m, uint8_t val);
+int motion_set_port (struct motion *m, uint8_t val);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
