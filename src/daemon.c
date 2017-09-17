@@ -60,7 +60,7 @@ char *prog = "";
 typedef struct {
     opt_t opt;
     struct hpad *hpad;
-    guide_t *guide;
+    struct guide *guide;
     motion_t t, d, f;
     struct ev_loop *loop;
     bool stopped;
@@ -73,7 +73,7 @@ int init_origin (ctx_t *ctx);
 int init_stopped (ctx_t *ctx);
 
 void hpad_cb (struct hpad *h, void *arg);
-void guide_cb (guide_t *g, void *arg);
+void guide_cb (struct guide *g, void *arg);
 
 int controller_vfromarcsec (opt_axis_t *axis, double arcsec_persec);
 double controller_fromarcsec (opt_axis_t *axis, double arcsec);
@@ -318,7 +318,7 @@ void hpad_cb (struct hpad *h, void *arg)
     }
 }
 
-void guide_cb (guide_t *g, void *arg)
+void guide_cb (struct guide *g, void *arg)
 {
     ctx_t *ctx = arg;
     int val;

@@ -41,14 +41,14 @@
 
 #include "guide.h"
 
-typedef struct {
+struct pin {
     int pin;
     int fd;
     struct epoll_event e;
-} pin_t;
+};
 
-struct guide_struct {
-    pin_t pins[4];
+struct guide {
+    struct pin pins[4];
     int efd;
     guide_cb_t cb;
     void *cb_arg;
@@ -58,9 +58,9 @@ struct guide_struct {
     ev_timer timer_w;
 };
 
-guide_t *guide_new (void)
+struct guide *guide_new (void)
 {
-    guide_t *g = xzmalloc (sizeof (*g));
+    struct guide *g = xzmalloc (sizeof (*g));
     int i;
     for (i = 0; i < 4; i++)
         g->pins[i].fd = -1;
@@ -68,14 +68,14 @@ guide_t *guide_new (void)
     return g;
 }
 
-void guide_destroy (guide_t *g)
+void guide_destroy (struct guide *g)
 {
     int i;
     if (g) {
         if (g->efd != -1)
             close (g->efd);
         for (i = 0; i < 4; i++) {
-            pin_t *p = &g->pins[i];
+            struct pin *p = &g->pins[i];
             if (p->fd != -1) {
                 (void)close (p->fd);
                 (void)gpio_set_export (p->pin, false);
@@ -85,13 +85,13 @@ void guide_destroy (guide_t *g)
     }
 }
 
-int guide_read (guide_t *g)
+int guide_read (struct guide *g)
 {
     int code = 0;
     int i;
 
     for (i = 0; i < 4; i++) {
-        pin_t *p = &g->pins[i];
+        struct pin *p = &g->pins[i];
         int val;
         if (gpio_read (p->fd, &val) < 0)
             return -1;
@@ -102,8 +102,7 @@ int guide_read (guide_t *g)
 
 static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    guide_t *g = (guide_t *)((char *)w
-               - offsetof (struct guide_struct, timer_w));
+    struct guide *g = (struct guide *)((char *)w - offsetof (struct guide, timer_w));
     int val = guide_read (g);
     if (val != g->val) {
         g->val = val;
@@ -113,16 +112,15 @@ static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 
 static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    guide_t *g = (guide_t *)((char *)w
-               - offsetof (struct guide_struct, io_w));
+    struct guide *g = (struct guide *)((char *)w - offsetof (struct guide, io_w));
     if (!ev_is_active (&g->timer_w)) {
         ev_timer_set (&g->timer_w, g->debounce, 0.);
         ev_timer_start (loop, &g->timer_w);
     }
 }
 
-int guide_init (guide_t *g, const char *pins, double debounce,
-               guide_cb_t cb, void *arg)
+int guide_init (struct guide *g, const char *pins, double debounce,
+                guide_cb_t cb, void *arg)
 {
     int i, rc = -1;
     char *tok, *cpy = NULL;
@@ -136,7 +134,7 @@ int guide_init (guide_t *g, const char *pins, double debounce,
     cpy = xstrdup (pins);
     tok = strtok (cpy, ",");
     for (i = 0; i < 4; i++) {
-        pin_t *p = &g->pins[i];
+        struct pin *p = &g->pins[i];
         if (!tok) {
             errno = EINVAL;
             goto done;
@@ -169,12 +167,12 @@ done:
     return rc;
 }
 
-void guide_start (struct ev_loop *loop, guide_t *g)
+void guide_start (struct ev_loop *loop, struct guide *g)
 {
     ev_io_start (loop, &g->io_w);
 }
 
-void guide_stop (struct ev_loop *loop, guide_t *g)
+void guide_stop (struct ev_loop *loop, struct guide *g)
 {
     ev_io_stop (loop, &g->io_w);
     ev_timer_stop (loop, &g->timer_w);

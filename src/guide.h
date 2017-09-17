@@ -7,19 +7,19 @@ enum {
     GUIDE_RA_PLUS = 8,
 };
 
-typedef struct guide_struct guide_t;
-typedef void (*guide_cb_t)(guide_t *g, void *arg);
+struct guide;
+typedef void (*guide_cb_t)(struct guide *g, void *arg);
 
-guide_t *guide_new (void);
-void guide_destroy (guide_t *g);
+struct guide *guide_new (void);
+void guide_destroy (struct guide *g);
 
-int guide_init (guide_t *g, const char *pins, double debounce,
+int guide_init (struct guide *g, const char *pins, double debounce,
                guide_cb_t cb, void *arg);
 
-int guide_read (guide_t *g);
+int guide_read (struct guide *g);
 
-void guide_start (struct ev_loop *loop, guide_t *g);
-void guide_stop (struct ev_loop *loop, guide_t *g);
+void guide_start (struct ev_loop *loop, struct guide *g);
+void guide_stop (struct ev_loop *loop, struct guide *g);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
