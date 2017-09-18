@@ -10,7 +10,12 @@ IM483i motion controllers, and GPIO based autogider and handbox interfaces.
 This the electronics are packaged in a 7x7x5 DIN rail enclosure that
 mounts to the telescope pier.
 
-Status:  The handbox can be used to slew the telescope.
+[This page](https://github.com/garlick/gem-controld/blob/master/dts/README.md)
+describes the hardware in further detail.
+
+### status
+
+Current:  The handbox can be used to slew the telescope.
 
 Partially completed: autoguiding interface.
 
@@ -19,3 +24,5 @@ the telescope to be synchronized to the SkySafari iPad app, as though
 it were "push-to" scope wtih encoders.
 
 Longer term: goto interface to SkySafari, KStars, or TheSky.
+
+
