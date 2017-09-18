@@ -80,13 +80,14 @@ int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hMBHf"
+#define OPTIONS "+c:hMBHGf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug-motion",         no_argument,       0, 'M'},
     {"debug-bbox",           no_argument,       0, 'B'},
     {"debug-hpad",           no_argument,       0, 'H'},
+    {"debug-guide",          no_argument,       0, 'G'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -99,6 +100,7 @@ static void usage (void)
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -B,--debug-bbox     emit bbox protocol to stderr\n"
 "    -H,--debug-hpad     emit hpad events to stderr\n"
+"    -G,--debug-guide    emit guide pulse events to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
@@ -112,6 +114,7 @@ int main (int argc, char *argv[])
     int motion_flags = 0;
     int bbox_flags = 0;
     int hpad_flags = 0;
+    int guide_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -140,6 +143,9 @@ int main (int argc, char *argv[])
                 break;
             case 'H':   /* --debug-hpad */
                 hpad_flags |= HPAD_DEBUG;
+                break;
+            case 'G':   /* --debug-guide */
+                guide_flags |= GUIDE_DEBUG;
                 break;
             case 'f':   /* --force */
                 motion_flags |= MOTION_RESET;
@@ -174,7 +180,7 @@ int main (int argc, char *argv[])
 
     ctx.guide = guide_new ();
     if (guide_init (ctx.guide, ctx.opt.guide_gpio, ctx.opt.guide_debounce,
-                   guide_cb, &ctx) < 0)
+                   guide_cb, &ctx, guide_flags) < 0)
         err_exit ("guide_init");
     guide_start (ctx.loop, ctx.guide);
 

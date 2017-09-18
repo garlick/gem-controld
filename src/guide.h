@@ -7,6 +7,10 @@ enum {
     GUIDE_RA_PLUS = 8,
 };
 
+enum {
+    GUIDE_DEBUG = 1,
+};
+
 struct guide;
 typedef void (*guide_cb_t)(struct guide *g, void *arg);
 
@@ -14,7 +18,7 @@ struct guide *guide_new (void);
 void guide_destroy (struct guide *g);
 
 int guide_init (struct guide *g, const char *pins, double debounce,
-               guide_cb_t cb, void *arg);
+               guide_cb_t cb, void *arg, int flags);
 
 int guide_read (struct guide *g);
 

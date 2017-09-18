@@ -105,7 +105,8 @@ int main (int argc, char *argv[])
     msg ("hpad configured");
 
     guide = guide_new ();
-    if (guide_init (guide, cfg.guide_gpio, cfg.guide_debounce, guide_cb, NULL) < 0)
+    if (guide_init (guide, cfg.guide_gpio, cfg.guide_debounce,
+                    guide_cb, NULL, GUIDE_DEBUG) < 0)
         err_exit ("guide_init");
     guide_start (loop, guide);
     msg ("guide configured");
@@ -141,11 +142,6 @@ void guide_cb (struct guide *g, void *arg)
         err ("guide");
         return;
     }
-    msg ("guide: (0x%x) %sRA+ %sRA- %sDEC+ %sDEC-", val,
-         (val & GUIDE_RA_PLUS) ? "*" : " ",
-         (val & GUIDE_RA_MINUS) ? "*" : " ",
-         (val & GUIDE_DEC_PLUS) ? "*" : " ",
-         (val & GUIDE_DEC_MINUS) ? "*" : " ");
 }
 
 /*
