@@ -5,18 +5,19 @@ The mount is a Parallax series 125 head that has been retrofitted
 with stepper motors on RA and DEC axes.
 
 Electronics are based on the Beaglebone Black ARM-based single board
-computer running Linux, a custom interface "cape", two RS-422 based
-IM483i motion controllers, and GPIO based autogider and handbox interfaces.
-The electronics are packaged in a 7x7x5 DIN rail enclosure that
-mounts to the telescope pier.
-
-[This page](https://github.com/garlick/gem-controld/blob/master/dts/README.md)
-describes the hardware in further detail.
+computer running Linux, a custom interface "cape" with two
+[RS-422 transceivers](http://www.ti.com/product/sn65hvd379) which connect to
+[Schneider Electric IM483i](http://motion.schneider-electric.com/products/im483i_ie.html)
+motion controllers, and GPIO based
+[autogider](http://www.store.shoestringastronomy.com/guide_port_cables.pdf) and
+[handbox](http://www.bbastrodesigns.com/handpad-assembly_notes.html) interfaces.
+The electronics are packaged in a 7x7x5 DIN rail enclosure that mounts to
+the telescope pier.
 
 ### status
 
 The handbox can be used to slew the telescope in two speeds, and the RA axis
-tracks at a fixed sidereal rate of 15.0417 arcsec/sec.
+tracks at a fixed sidereal rate.
 
 Partially completed: autoguiding interface.
 
