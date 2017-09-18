@@ -49,6 +49,7 @@
 #include "motion.h"
 #include "hpad.h"
 #include "guide.h"
+#include "bbox.h"
 
 const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
@@ -58,6 +59,7 @@ struct prog_context {
     struct config opt;
     struct hpad *hpad;
     struct guide *guide;
+    struct bbox *bbox;
     struct motion *t;
     struct motion *d;
     struct ev_loop *loop;
@@ -72,6 +74,7 @@ int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
+void bbox_cb (struct bbox *bb, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
@@ -164,8 +167,20 @@ int main (int argc, char *argv[])
         err_exit ("guide_init");
     guide_start (ctx.loop, ctx.guide);
 
+    ctx.bbox = bbox_new ();
+    if (bbox_init (ctx.bbox, DEFAULT_BBOX_PORT, bbox_cb, &ctx, 0) < 0)
+        err_exit ("bbox_init");
+    bbox_set_resolution (ctx.bbox, ctx.opt.t.steps, ctx.opt.d.steps);
+    bbox_start (ctx.loop, ctx.bbox);
+
     ev_run (ctx.loop, 0);
     ev_loop_destroy (ctx.loop);
+
+    bbox_stop (ctx.loop, ctx.bbox);
+    bbox_destroy (ctx.bbox);
+
+    guide_stop (ctx.loop, ctx.guide);
+    guide_destroy (ctx.guide);
 
     hpad_stop (ctx.loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
@@ -317,6 +332,24 @@ void guide_cb (struct guide *g, void *arg)
         err_exit ("guide");
     if (ctx->opt.debug)
         msg ("guide: %d", val);
+}
+
+/* Bbox protocol requests that we update "encoder" position.
+ */
+void bbox_cb (struct bbox *bb, void *arg)
+{
+    struct prog_context *ctx = arg;
+    double x, y;
+
+    if (motion_get_position (ctx->t, &x) < 0) {
+        err ("%s: error reading t position", __FUNCTION__);
+        return;
+    }
+    if (motion_get_position (ctx->d, &y) < 0) {
+        err ("%s: error reading d position", __FUNCTION__);
+        return;
+    }
+    bbox_set_position (bb, (int)x, (int)y);
 }
 
 /* Return position in arcsec from controller steps
