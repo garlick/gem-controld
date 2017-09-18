@@ -1,32 +1,21 @@
 ### gem-controld
 
-This project is firmware for a german equatorial mount for telescopes.
+This project is a control system for a german equatorial telescope mount.
 The mount is a Parallax series 125 head that has been retrofitted
-with 400-step stepper motors on RA and DEC axes.
+with stepper motors on RA and DEC axes.
 
 Electronics are based on the Beaglebone Black ARM-based single board
-computer running Linux, a custom interface "cape", and off the shelf
-motion controllers.  This plus an ethernet switch and powered USB hub
-on DIN rail are mounted in a 7x7x5 inch enclosure attached to the
-telescope pier.
+computer running Linux, a custom interface "cape", two RS-422 based
+IM483i motion controllers, and GPIO based autogider and handbox interfaces.
+This the electronics are packaged in a 7x7x5 DIN rail enclosure that
+mounts to the telescope pier.
 
-#### Completed
+Status:  The handbox can be used to slew the telescope.
 
-* select motion controller config for stepper motors
-* RS-422 interface to motion controllers using two Beaglebone serial ports
-* Handpad interface using four GPIO pins
-* ini-style config file
-* device tree overlay
-* constant velocity tracking in RA
-* Handpad control of both axes, fast and slow speeds
-* Event loop
+Partially completed: autoguiding interface.
 
-#### Still working on
+Near term: a Tangent BBOX style interface that will allow
+the telescope to be synchronized to the SkySafari iPad app, as though
+it were "push-to" scope wtih encoders.
 
-* encoder interface for PEC
-* RA velocity tuning
-* transform X, Y coordinates (steps) to RA, DEC
-* develop alignment sequence to initialize RA, DEC offsets
-* ST-4 style guiding input
-* zeromq interface for remote autoguiding and status
-* LX200 protocol emulation for Sky Safari control
+Longer term: goto interface to SkySafari, KStars, or TheSky.
