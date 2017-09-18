@@ -1,28 +1,28 @@
 include ../Makefile.inc
 
-PROG = gem-motiond
+PROGS = gem-motiond test-hpad
 
 CFLAGS = -Wall -D_GNU_SOURCE=1 -I$(abs_topdir) \
 	 -DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
 
-LIBS  = -L$(abs_topdir)/libutil -lutil \
-	-L$(abs_topdir)/libini -lini \
+LIBS  = -L$(abs_topdir)/libini -lini \
 	-lpthread -lev -lm -lrt
 
-OBJS = configfile.o xzmalloc.o log.o gpio.o hpad.o guide.o motion.o daemon.o
+OBJS = configfile.o xzmalloc.o log.o gpio.o hpad.o guide.o motion.o
 
-all: $(PROG)
+all: $(PROGS)
 
-$(PROG): $(OBJS)
+gem-motiond: daemon.o $(OBJS)
 	$(CC) -o $@ $^ $(LIBS)
 
-install: $(PROG)
-	cp $(PROG) $(prefix)/sbin/$(PROG)
+test-hpad: test-hpad.o $(OBJS)
+	$(CC) -o $@ $^ $(LIBS)
 
-install_cli:
+install: $(PROGS)
+	cp gem-motiond $(prefix)/sbin/gem-motiond
 
 clean:
-	rm -f *.o $(PROG)
+	rm -f *.o $(PROGS)
 
 test:
 	echo $(CFLAGS)

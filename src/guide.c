@@ -146,6 +146,8 @@ int guide_init (struct guide *g, const char *pins, double debounce,
             goto done;
         if (gpio_set_edge (p->pin, "both") < 0)
             goto done;
+        if (gpio_set_polarity (p->pin, false) < 0) // active low
+            goto done;
         if ((p->fd = gpio_open (p->pin, O_RDONLY)) < 0)
             goto done;
         p->e.data.fd = p->fd;

@@ -1,3 +1,5 @@
+#include <stdbool.h>
+
 struct config_axis {
     char *device;
     int mode;

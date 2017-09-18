@@ -20,8 +20,7 @@
         "P8_46", "gpio2_7",
 
         "P9.24", "P9.26", "uart1",                    // motion control RS-422
-        "P9.21", "P9.22", "uart2",
-        "P9.11", "P9.13", "uart4";
+        "P9.21", "P9.22", "uart2";
 
 // UART 1 is connected to RA motion controller
 
@@ -69,47 +68,23 @@
         };
     };
 
-// UART 4 is connected to focus motion controller
+// 4 GPIO inputs are connected to handbox (internal pull-downs)
 
     fragment@4 {
         target = <&am33xx_pinmux>;
         __overlay__ {
-            gem_focus_uart: pinmux_gem_focus_uart {
+            gem_hbox: pinmux_gem_hbox {
                 pinctrl-single,pins = <
-                    0x074 0x06             // P9.13 mode6 output (tx)
-                    0x070 0x26             // P9.11 mode6 input (rx)
+                    0x090 0x27             // P8.7 mode7 input + p/d
+                    0x094 0x27             // P8.8 mode7 input + p/d
+                    0x09c 0x27             // P8.9 mode7 input + p/d
+                    0x098 0x27             // P8.10 mode7 input + p/d
                 >;
             };
         };
     };
 
     fragment@5 {
-        target = <&uart4>;
-        __overlay__ {
-            status = "okay";
-            pinctrl-names = "default";
-            pinctrl-0 = <&gem_focus_uart>;
-        };
-    };
-
-
-// 4 GPIO inputs are connected to handbox, with external pull-downs
-
-    fragment@6 {
-        target = <&am33xx_pinmux>;
-        __overlay__ {
-            gem_hbox: pinmux_gem_hbox {
-                pinctrl-single,pins = <
-                    0x090 0x2f             // P8.7 mode7 input
-                    0x094 0x2f             // P8.8 mode7 input
-                    0x09c 0x2f             // P8.9 mode7 input
-                    0x098 0x2f             // P8.10 mode7 input
-                >;
-            };
-        };
-    };
-
-    fragment@7 {
         target = <&ocp>;
         __overlay__ {
             gem_hbox_pinmux {
@@ -123,7 +98,7 @@
 
 // 4 GPIO inputs are connected to guide port (internal pull-ups)
 
-    fragment@8 {
+    fragment@6 {
         target = <&am33xx_pinmux>;
         __overlay__ {
             gem_guide: pinmux_gem_guide {
@@ -137,7 +112,7 @@
         };
     };
 
-    fragment@9 {
+    fragment@7 {
         target = <&ocp>;
         __overlay__ {
             gem_guide_pinmux {

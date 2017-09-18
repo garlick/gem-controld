@@ -85,10 +85,12 @@ int motion_set_origin (struct motion *m);
  *  1 in-2
  *  2 in-3
  *  3 out-1   (green LED: 0=on, 1=off)
- *  4 out-2
- *  5 out-3
+ *  4 out-2   (white LED: 0=on, 1=off)
+ *  5 out-3   (blue LED: 0=on, 1=off)
  */
-#define GREEN_LED_MASK  (8)
+#define GREEN_LED_MASK  (1<<3)
+#define WHITE_LED_MASK  (1<<4)
+#define BLUE_LED_MASK  (1<<5)
 int motion_get_port (struct motion *m, uint8_t *val);
 
 /* Write 6-bit GPIO port.
