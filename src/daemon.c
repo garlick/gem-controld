@@ -188,6 +188,13 @@ int init_stopped (struct motion *t, struct motion *d)
     return (a == 0 && b == 0);
 }
 
+/* The green LED goes off after the axes are zeroed
+ * by calling set_origin() - M1 + M2 buttons on the handpad.
+ * The LED state which lives in the motion controller
+ * persists across a daemon restart, so get the initial
+ * state of zeroed/not zeroed by reading the LED state.
+ */
+
 int init_origin (struct motion *t, struct motion *d)
 {
     uint8_t a, b;
