@@ -1,6 +1,7 @@
 #include <ev.h>
 
 enum {
+    GUIDE_NONE = 0,
     GUIDE_RA_MINUS = 1,
     GUIDE_DEC_MINUS = 2,
     GUIDE_DEC_PLUS = 4,

@@ -281,8 +281,10 @@ void hpad_cb (struct hpad *h, void *arg)
     struct prog_context *ctx = arg;
     int val;
 
-    if ((val = hpad_read (h)) < 0)
-        err_exit ("hpad");
+    if ((val = hpad_read (h)) < 0) {
+        err ("hpad_read");
+        return;
+    }
 
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
@@ -291,42 +293,42 @@ void hpad_cb (struct hpad *h, void *arg)
             if (!ctx->stopped && ctx->zeroed)
                 vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
             if (motion_set_velocity (ctx->t, vx) < 0)
-                err_exit ("t: set velocity");
+                err ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
-                err_exit ("d: set velocity");
+                err ("d: set velocity");
             break;
         }
         case HPAD_KEY_NORTH: {
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, v) < 0)
-                err_exit ("d: set velocity");
+                err ("d: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: {
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err_exit ("d: set velocity");
+                err ("d: set velocity");
             break;
         }
         case HPAD_KEY_WEST: {
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, v) < 0)
-                err_exit ("t: set velocity");
+                err ("t: set velocity");
             break;
         }
         case HPAD_KEY_EAST: {
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, -1*v) < 0)
-                err_exit ("t: set velocity");
+                err ("t: set velocity");
             break;
         }
         case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
             if (set_origin (ctx->t, ctx->d) < 0)
-                err_exit ("set origin");
+                err ("set origin");
             ctx->stopped = true;
             ctx->zeroed = true;
             break;
@@ -338,13 +340,50 @@ void hpad_cb (struct hpad *h, void *arg)
     }
 }
 
+/* FIXME: guide/hpad will interfere with each other, e.g. if a handpad slew
+ * is in progress, a GUIDE_NONE event will stop it.
+ * FIXME: make guide speed configurable
+ */
 void guide_cb (struct guide *g, void *arg)
 {
-    //struct prog_context *ctx = arg;
+    struct prog_context *ctx = arg;
     int val;
 
-    if ((val = guide_read (g)) < 0)
-        err_exit ("guide");
+    if ((val = guide_read (g)) < 0) {
+        err ("guide_read");
+        return;
+    }
+
+    if (val == GUIDE_NONE) {
+        int vx = 0;
+        if (!ctx->stopped && ctx->zeroed)
+            vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+        if (motion_set_velocity (ctx->t, vx) < 0)
+            err ("t: set velocity");
+        if (motion_set_velocity (ctx->d, 0) < 0)
+            err ("d: set velocity");
+    } else {
+        if ((val & GUIDE_DEC_PLUS)) {
+            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.slow);
+            if (motion_set_velocity (ctx->d, v) < 0)
+                err ("d: set velocity");
+        }
+        else if ((val & GUIDE_DEC_MINUS)) {
+            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.slow);
+            if (motion_set_velocity (ctx->d, -1*v) < 0)
+                err ("d: set velocity");
+        }
+        if ((val & GUIDE_RA_PLUS)) {
+            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
+            if (motion_set_velocity (ctx->t, v) < 0)
+                err ("t: set velocity");
+        }
+        else if ((val & GUIDE_RA_MINUS)) {
+            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
+            if (motion_set_velocity (ctx->t, -1*v) < 0)
+                err ("t: set velocity");
+        }
+    }
 }
 
 /* Bbox protocol requests that we update "encoder" position.
