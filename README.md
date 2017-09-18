@@ -18,10 +18,9 @@ the telescope pier.
 The handbox can be used to slew the telescope in two speeds, and the RA axis
 tracks at a fixed sidereal rate.
 
-Partially completed: autoguiding interface.
+A Tangent BBOX style network interface allows the telescope to be synchronized
+to the SkySafari iPad app, as though it were "push-to" scope with encoders.
 
-Near term: a Tangent BBOX style interface that will allow
-the telescope to be synchronized to the SkySafari iPad app, as though
-it were "push-to" scope with encoders.
+Autoguiding on an ST-4 interface works.
 
 Later: goto interface to SkySafari, KStars, or TheSky.
