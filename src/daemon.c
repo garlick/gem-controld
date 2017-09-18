@@ -80,11 +80,11 @@ int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hdf"
+#define OPTIONS "+c:hMf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
-    {"debug",                no_argument,       0, 'd'},
+    {"debug-motion",         no_argument,       0, 'M'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -94,7 +94,7 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
-"    -d,--debug          emit verbose debugging to stderr\n"
+"    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
@@ -105,7 +105,7 @@ int main (int argc, char *argv[])
     int ch;
     struct prog_context ctx;
     char *config_filename = NULL;
-    int flags = 0;
+    int motion_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -126,11 +126,11 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'c':   /* --config FILE (handled above) */
                 break;
-            case 'd':   /* --debug */
-                flags |= MOTION_DEBUG;
+            case 'M':   /* --debug-motion */
+                motion_flags |= MOTION_DEBUG;
                 break;
             case 'f':   /* --force */
-                flags |= MOTION_RESET;
+                motion_flags |= MOTION_RESET;
                 break;
             case 'h':   /* --help */
             default:
@@ -147,8 +147,8 @@ int main (int argc, char *argv[])
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    ctx.t = init_axis (&ctx.opt.t, "t", flags);
-    ctx.d = init_axis (&ctx.opt.d, "d", flags);
+    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
+    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
     if ((ctx.zeroed = init_origin (ctx.t, ctx.d)) < 0)
         err_exit ("init_origin");
     if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
