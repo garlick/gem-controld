@@ -1,7 +1,7 @@
-### Device Tree overlay
+### device tree overlay
 
 `GEM-IO` is the device tree overlay for the "cape" used in this project.
-This description assumes debian wheezy with kernel 4.x or similar.
+This description assumes Debian Jessie with kernel 4.x or similar.
 
 We need the device tree compiler `dtc`:
 ```

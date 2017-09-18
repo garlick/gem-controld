@@ -23,6 +23,6 @@ Partially completed: autoguiding interface.
 
 Near term: a Tangent BBOX style interface that will allow
 the telescope to be synchronized to the SkySafari iPad app, as though
-it were "push-to" scope wtih encoders.
+it were "push-to" scope with encoders.
 
 Later: goto interface to SkySafari, KStars, or TheSky.
