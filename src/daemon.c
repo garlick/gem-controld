@@ -80,11 +80,12 @@ int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hMf"
+#define OPTIONS "+c:hMBf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug-motion",         no_argument,       0, 'M'},
+    {"debug-bbox",           no_argument,       0, 'B'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -95,6 +96,7 @@ static void usage (void)
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
+"    -B,--debug-bbox     emit bbox protocol to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
@@ -106,6 +108,7 @@ int main (int argc, char *argv[])
     struct prog_context ctx;
     char *config_filename = NULL;
     int motion_flags = 0;
+    int bbox_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -128,6 +131,9 @@ int main (int argc, char *argv[])
                 break;
             case 'M':   /* --debug-motion */
                 motion_flags |= MOTION_DEBUG;
+                break;
+            case 'B':   /* --debug-bbox */
+                bbox_flags |= BBOX_DEBUG;
                 break;
             case 'f':   /* --force */
                 motion_flags |= MOTION_RESET;
@@ -167,7 +173,7 @@ int main (int argc, char *argv[])
     guide_start (ctx.loop, ctx.guide);
 
     ctx.bbox = bbox_new ();
-    if (bbox_init (ctx.bbox, DEFAULT_BBOX_PORT, bbox_cb, &ctx, 0) < 0)
+    if (bbox_init (ctx.bbox, DEFAULT_BBOX_PORT, bbox_cb, &ctx, bbox_flags) < 0)
         err_exit ("bbox_init");
     bbox_set_resolution (ctx.bbox, ctx.opt.t.steps, ctx.opt.d.steps);
     bbox_start (ctx.loop, ctx.bbox);
