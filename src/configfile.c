@@ -94,14 +94,7 @@ static int config_cb (void *user, const char *section, const char *name,
     struct config *opt = user;
     int rc = 1; /* 0 = error */
 
-    if (!strcmp (section, "general")) {
-        if (!strcmp (name, "debug")) {
-            if (!strcmp (value, "yes"))
-                opt->debug = true;
-            else if (!strcmp (value, "no"))
-                opt->debug = false;
-        }
-    } else if (!strcmp (section, "t_axis"))
+    if (!strcmp (section, "t_axis"))
         rc = config_axis (&opt->t, name, value);
     else if (!strcmp (section, "d_axis"))
         rc = config_axis (&opt->d, name, value);

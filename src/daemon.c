@@ -127,7 +127,6 @@ int main (int argc, char *argv[])
             case 'c':   /* --config FILE (handled above) */
                 break;
             case 'd':   /* --debug */
-                ctx.opt.debug = true;
                 flags |= MOTION_DEBUG;
                 break;
             case 'f':   /* --force */
@@ -266,8 +265,6 @@ void hpad_cb (struct hpad *h, void *arg)
 
     if ((val = hpad_read (h)) < 0)
         err_exit ("hpad");
-    if (ctx->opt.debug)
-        msg ("hpad: %d", val);
 
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
@@ -325,13 +322,11 @@ void hpad_cb (struct hpad *h, void *arg)
 
 void guide_cb (struct guide *g, void *arg)
 {
-    struct prog_context *ctx = arg;
+    //struct prog_context *ctx = arg;
     int val;
 
     if ((val = guide_read (g)) < 0)
         err_exit ("guide");
-    if (ctx->opt.debug)
-        msg ("guide: %d", val);
 }
 
 /* Bbox protocol requests that we update "encoder" position.
