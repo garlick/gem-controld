@@ -12,6 +12,10 @@ enum {
     HPAD_MASK_FAST = 8
 };
 
+enum {
+    HPAD_DEBUG = 1,
+};
+
 struct hpad;
 
 typedef void (*hpad_cb_t)(struct hpad *h, void *arg);
@@ -20,7 +24,7 @@ struct hpad *hpad_new (void);
 void hpad_destroy (struct hpad *h);
 
 int hpad_init (struct hpad *h, const char *pins, double debounce,
-               hpad_cb_t cb, void *arg);
+               hpad_cb_t cb, void *arg, int flags);
 
 int hpad_read (struct hpad *h);
 

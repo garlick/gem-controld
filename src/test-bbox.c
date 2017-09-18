@@ -31,8 +31,7 @@
 #include "log.h"
 #include "xzmalloc.h"
 #include "configfile.h"
-#include "hpad.h"
-#include "guide.h"
+#include "bbox.h"
 
 #define OPTIONS "+c:h"
 static const struct option longopts[] = {
@@ -41,13 +40,12 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
-void hpad_cb (struct hpad *h, void *arg);
-void guide_cb (struct guide *g, void *arg);
+void bbox_cb (struct bbox *bb, void *arg);
 
 static void usage (void)
 {
     fprintf (stderr,
-"Usage: gem [OPTIONS]\n"
+"Usage: test-bbox [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
 );
     exit (1);
@@ -58,8 +56,7 @@ int main (int argc, char *argv[])
     int ch;
     char *config_filename = NULL;
     struct config cfg;
-    struct hpad *hpad;
-    struct guide *guide;
+    struct bbox *bb;
     char *prog;
     struct ev_loop *loop;
 
@@ -89,59 +86,30 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
-    if (!cfg.hpad_gpio)
-        msg_exit ("hpad_gpio was not configured");
-    if (!cfg.guide_gpio)
-        msg_exit ("guide_gpio was not configured");
 
     if (!(loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    hpad = hpad_new ();
-    if (hpad_init (hpad, cfg.hpad_gpio, cfg.hpad_debounce,
-                   hpad_cb, NULL, HPAD_DEBUG) < 0)
+    bb = bbox_new ();
+    if (bbox_init (bb, DEFAULT_BBOX_PORT, bbox_cb, NULL, BBOX_DEBUG) < 0)
         err_exit ("hpad_init");
-    hpad_start (loop, hpad);
-    msg ("hpad configured");
-
-    guide = guide_new ();
-    if (guide_init (guide, cfg.guide_gpio, cfg.guide_debounce,
-                    guide_cb, NULL, GUIDE_DEBUG) < 0)
-        err_exit ("guide_init");
-    guide_start (loop, guide);
-    msg ("guide configured");
+    bbox_start (loop, bb);
+    bbox_set_resolution (bb, 8192, 4096);
+    msg ("bbox configured");
 
     ev_run (loop, 0);
 
     ev_loop_destroy (loop);
 
-    guide_stop (loop, guide);
-    guide_destroy (guide);
-
-    hpad_stop (loop, hpad);
-    hpad_destroy (hpad);
+    bbox_stop (loop, bb);
+    bbox_destroy (bb);
 
     return 0;
 }
 
-void hpad_cb (struct hpad *h, void *arg)
+void bbox_cb (struct bbox *bb, void *arg)
 {
-    int val;
-
-    if ((val = hpad_read (h)) < 0) {
-        err ("hpad");
-        return;
-    }
-}
-
-void guide_cb (struct guide *g, void *arg)
-{
-    int val;
-
-    if ((val = guide_read (g)) < 0) {
-        err ("guide");
-        return;
-    }
+    bbox_set_position (bb, 42, 84);
 }
 
 /*

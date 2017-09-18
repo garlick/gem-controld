@@ -49,6 +49,7 @@
 #include "motion.h"
 #include "hpad.h"
 #include "guide.h"
+#include "bbox.h"
 
 const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
@@ -58,6 +59,7 @@ struct prog_context {
     struct config opt;
     struct hpad *hpad;
     struct guide *guide;
+    struct bbox *bbox;
     struct motion *t;
     struct motion *d;
     struct ev_loop *loop;
@@ -72,16 +74,20 @@ int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
+void bbox_cb (struct bbox *bb, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hdf"
+#define OPTIONS "+c:hMBHGf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
-    {"debug",                no_argument,       0, 'd'},
+    {"debug-motion",         no_argument,       0, 'M'},
+    {"debug-bbox",           no_argument,       0, 'B'},
+    {"debug-hpad",           no_argument,       0, 'H'},
+    {"debug-guide",          no_argument,       0, 'G'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -91,7 +97,10 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
-"    -d,--debug          emit verbose debugging to stderr\n"
+"    -M,--debug-motion   emit motion control commands and responses to stderr\n"
+"    -B,--debug-bbox     emit bbox protocol to stderr\n"
+"    -H,--debug-hpad     emit hpad events to stderr\n"
+"    -G,--debug-guide    emit guide pulse events to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
@@ -102,7 +111,10 @@ int main (int argc, char *argv[])
     int ch;
     struct prog_context ctx;
     char *config_filename = NULL;
-    int flags = 0;
+    int motion_flags = 0;
+    int bbox_flags = 0;
+    int hpad_flags = 0;
+    int guide_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -123,12 +135,20 @@ int main (int argc, char *argv[])
         switch (ch) {
             case 'c':   /* --config FILE (handled above) */
                 break;
-            case 'd':   /* --debug */
-                ctx.opt.debug = true;
-                flags |= MOTION_DEBUG;
+            case 'M':   /* --debug-motion */
+                motion_flags |= MOTION_DEBUG;
+                break;
+            case 'B':   /* --debug-bbox */
+                bbox_flags |= BBOX_DEBUG;
+                break;
+            case 'H':   /* --debug-hpad */
+                hpad_flags |= HPAD_DEBUG;
+                break;
+            case 'G':   /* --debug-guide */
+                guide_flags |= GUIDE_DEBUG;
                 break;
             case 'f':   /* --force */
-                flags |= MOTION_RESET;
+                motion_flags |= MOTION_RESET;
                 break;
             case 'h':   /* --help */
             default:
@@ -145,8 +165,8 @@ int main (int argc, char *argv[])
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    ctx.t = init_axis (&ctx.opt.t, "t", flags);
-    ctx.d = init_axis (&ctx.opt.d, "d", flags);
+    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
+    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
     if ((ctx.zeroed = init_origin (ctx.t, ctx.d)) < 0)
         err_exit ("init_origin");
     if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
@@ -154,18 +174,30 @@ int main (int argc, char *argv[])
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
-                   hpad_cb, &ctx) < 0)
+                   hpad_cb, &ctx, hpad_flags) < 0)
         err_exit ("hpad_init");
     hpad_start (ctx.loop, ctx.hpad);
 
     ctx.guide = guide_new ();
     if (guide_init (ctx.guide, ctx.opt.guide_gpio, ctx.opt.guide_debounce,
-                   guide_cb, &ctx) < 0)
+                   guide_cb, &ctx, guide_flags) < 0)
         err_exit ("guide_init");
     guide_start (ctx.loop, ctx.guide);
 
+    ctx.bbox = bbox_new ();
+    if (bbox_init (ctx.bbox, DEFAULT_BBOX_PORT, bbox_cb, &ctx, bbox_flags) < 0)
+        err_exit ("bbox_init");
+    bbox_set_resolution (ctx.bbox, ctx.opt.t.steps, ctx.opt.d.steps);
+    bbox_start (ctx.loop, ctx.bbox);
+
     ev_run (ctx.loop, 0);
     ev_loop_destroy (ctx.loop);
+
+    bbox_stop (ctx.loop, ctx.bbox);
+    bbox_destroy (ctx.bbox);
+
+    guide_stop (ctx.loop, ctx.guide);
+    guide_destroy (ctx.guide);
 
     hpad_stop (ctx.loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
@@ -251,8 +283,6 @@ void hpad_cb (struct hpad *h, void *arg)
 
     if ((val = hpad_read (h)) < 0)
         err_exit ("hpad");
-    if (ctx->opt.debug)
-        msg ("hpad: %d", val);
 
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
@@ -310,13 +340,29 @@ void hpad_cb (struct hpad *h, void *arg)
 
 void guide_cb (struct guide *g, void *arg)
 {
-    struct prog_context *ctx = arg;
+    //struct prog_context *ctx = arg;
     int val;
 
     if ((val = guide_read (g)) < 0)
         err_exit ("guide");
-    if (ctx->opt.debug)
-        msg ("guide: %d", val);
+}
+
+/* Bbox protocol requests that we update "encoder" position.
+ */
+void bbox_cb (struct bbox *bb, void *arg)
+{
+    struct prog_context *ctx = arg;
+    double x, y;
+
+    if (motion_get_position (ctx->t, &x) < 0) {
+        err ("%s: error reading t position", __FUNCTION__);
+        return;
+    }
+    if (motion_get_position (ctx->d, &y) < 0) {
+        err ("%s: error reading d position", __FUNCTION__);
+        return;
+    }
+    bbox_set_position (bb, (int)x, (int)y);
 }
 
 /* Return position in arcsec from controller steps

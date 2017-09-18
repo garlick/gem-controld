@@ -22,7 +22,6 @@ struct config_axis {
 struct config {
     struct config_axis t;
     struct config_axis d;
-    bool debug;
     bool no_motion;
     bool soft_init;
     char *hpad_gpio;

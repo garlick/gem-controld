@@ -48,6 +48,7 @@ struct pin {
 };
 
 struct guide {
+    int flags;
     struct pin pins[4];
     int efd;
     guide_cb_t cb;
@@ -85,6 +86,15 @@ void guide_destroy (struct guide *g)
     }
 }
 
+static void guide_dump (int val)
+{
+    msg ("guide: (0x%x) %sRA+ %sRA- %sDEC+ %sDEC-", val,
+         (val & GUIDE_RA_PLUS) ? "*" : " ",
+         (val & GUIDE_RA_MINUS) ? "*" : " ",
+         (val & GUIDE_DEC_PLUS) ? "*" : " ",
+         (val & GUIDE_DEC_MINUS) ? "*" : " ");
+}
+
 int guide_read (struct guide *g)
 {
     int code = 0;
@@ -97,6 +107,8 @@ int guide_read (struct guide *g)
             return -1;
         code |= (val<<i);
     }
+    if ((g->flags & GUIDE_DEBUG))
+        guide_dump (code);
     return code;
 }
 
@@ -120,11 +132,12 @@ static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 }
 
 int guide_init (struct guide *g, const char *pins, double debounce,
-                guide_cb_t cb, void *arg)
+                guide_cb_t cb, void *arg, int flags)
 {
     int i, rc = -1;
     char *tok, *cpy = NULL;
 
+    g->flags = flags;
     if (!pins) {
         errno = EINVAL;
         goto done;
@@ -155,6 +168,8 @@ int guide_init (struct guide *g, const char *pins, double debounce,
         if (epoll_ctl (g->efd, EPOLL_CTL_ADD, p->fd, &p->e) < 0)
             goto done;
         tok = strtok (NULL, ",");
+        if ((g->flags & GUIDE_DEBUG))
+            msg ("%s: configured gpio %d", __FUNCTION__, p->pin);
     }
     g->debounce = debounce;
     g->cb = cb;
