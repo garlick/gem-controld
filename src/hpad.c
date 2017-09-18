@@ -56,6 +56,7 @@ struct hpad {
     int val;
     ev_io io_w;
     ev_timer timer_w;
+    int flags;
 };
 
 struct hpad *hpad_new (void)
@@ -85,6 +86,42 @@ void hpad_destroy (struct hpad *h)
     }
 }
 
+static void hpad_dump (int val)
+{
+    bool fast = (val & HPAD_MASK_FAST);
+    switch (val & HPAD_MASK_KEYS) {
+        case HPAD_KEY_NONE: {
+            msg ("hpad: KEY_NONE (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        }
+        case HPAD_KEY_NORTH: {
+            msg ("hpad: KEY_NORTH (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        }
+        case HPAD_KEY_SOUTH: {
+            msg ("hpad: KEY_SOUTH (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        }
+        case HPAD_KEY_WEST: {
+            msg ("hpad: KEY_WEST (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        }
+        case HPAD_KEY_EAST: {
+            msg ("hpad: KEY_EAST (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        }
+        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
+            msg ("hpad: KEY_M1 and KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        case HPAD_KEY_M1: /* unused */
+            msg ("hpad: KEY_M1 (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+        case HPAD_KEY_M2: /* toggle stop */
+            msg ("hpad: KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
+            break;
+    }
+}
+
 int hpad_read (struct hpad *h)
 {
     int code = 0;
@@ -97,6 +134,8 @@ int hpad_read (struct hpad *h)
             return -1;
         code |= (val<<i);
     }
+    if ((h->flags & HPAD_DEBUG))
+        hpad_dump (code);
     return code;
 }
 
@@ -120,7 +159,7 @@ static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 }
 
 int hpad_init (struct hpad *h, const char *pins, double debounce,
-               hpad_cb_t cb, void *arg)
+               hpad_cb_t cb, void *arg, int flags)
 {
     int i, rc = -1;
     char *tok, *cpy = NULL;
@@ -129,6 +168,7 @@ int hpad_init (struct hpad *h, const char *pins, double debounce,
         errno = EINVAL;
         goto done;
     }
+    h->flags = flags;
     if ((h->efd = epoll_create (4)) < 0)    /* need this because libev */
         goto done;                          /*   doesn't grok POLLPRI */
     cpy = xstrdup (pins);
@@ -153,6 +193,8 @@ int hpad_init (struct hpad *h, const char *pins, double debounce,
         if (epoll_ctl (h->efd, EPOLL_CTL_ADD, p->fd, &p->e) < 0)
             goto done;
         tok = strtok (NULL, ",");
+        if ((h->flags & HPAD_DEBUG))
+            msg ("%s: configured gpio %d", __FUNCTION__, p->pin);
     }
     h->debounce = debounce;
     h->cb = cb;

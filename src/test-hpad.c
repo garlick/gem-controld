@@ -98,7 +98,8 @@ int main (int argc, char *argv[])
         err_exit ("ev_loop_new");
 
     hpad = hpad_new ();
-    if (hpad_init (hpad, cfg.hpad_gpio, cfg.hpad_debounce, hpad_cb, NULL) < 0)
+    if (hpad_init (hpad, cfg.hpad_gpio, cfg.hpad_debounce,
+                   hpad_cb, NULL, HPAD_DEBUG) < 0)
         err_exit ("hpad_init");
     hpad_start (loop, hpad);
     msg ("hpad configured");
@@ -129,39 +130,6 @@ void hpad_cb (struct hpad *h, void *arg)
     if ((val = hpad_read (h)) < 0) {
         err ("hpad");
         return;
-    }
-
-    bool fast = (val & HPAD_MASK_FAST);
-    switch (val & HPAD_MASK_KEYS) {
-        case HPAD_KEY_NONE: {
-            msg ("hpad: KEY_NONE (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_NORTH: {
-            msg ("hpad: KEY_NORTH (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_SOUTH: {
-            msg ("hpad: KEY_SOUTH (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_WEST: {
-            msg ("hpad: KEY_WEST (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_EAST: {
-            msg ("hpad: KEY_EAST (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
-            msg ("hpad: KEY_M1 and KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        case HPAD_KEY_M1: /* unused */
-            msg ("hpad: KEY_M1 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        case HPAD_KEY_M2: /* toggle stop */
-            msg ("hpad: KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
     }
 }
 

@@ -80,12 +80,13 @@ int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hMBf"
+#define OPTIONS "+c:hMBHf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug-motion",         no_argument,       0, 'M'},
     {"debug-bbox",           no_argument,       0, 'B'},
+    {"debug-hpad",           no_argument,       0, 'H'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -97,6 +98,7 @@ static void usage (void)
 "    -c,--config FILE    set path to config file\n"
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -B,--debug-bbox     emit bbox protocol to stderr\n"
+"    -H,--debug-hpad     emit hpad events to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
@@ -109,6 +111,7 @@ int main (int argc, char *argv[])
     char *config_filename = NULL;
     int motion_flags = 0;
     int bbox_flags = 0;
+    int hpad_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -134,6 +137,9 @@ int main (int argc, char *argv[])
                 break;
             case 'B':   /* --debug-bbox */
                 bbox_flags |= BBOX_DEBUG;
+                break;
+            case 'H':   /* --debug-hpad */
+                hpad_flags |= HPAD_DEBUG;
                 break;
             case 'f':   /* --force */
                 motion_flags |= MOTION_RESET;
@@ -162,7 +168,7 @@ int main (int argc, char *argv[])
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
-                   hpad_cb, &ctx) < 0)
+                   hpad_cb, &ctx, hpad_flags) < 0)
         err_exit ("hpad_init");
     hpad_start (ctx.loop, ctx.hpad);
 
