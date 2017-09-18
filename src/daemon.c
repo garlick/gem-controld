@@ -52,9 +52,6 @@
 
 const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
-const double pub_slow = 5; /* sec */
-const double pub_fast = 0.5; /* sec */
-
 char *prog = "";
 
 struct prog_context {
@@ -79,10 +76,6 @@ void guide_cb (struct guide *g, void *arg);
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 double controller_fromarcsec (struct config_axis *axis, double arcsec);
 double controller_toarcsec (struct config_axis *axis, double steps);
-
-int controller_vfrommicrons (struct config_axis *axis, double microns_persec);
-double controller_frommicrons (struct config_axis *axis, double microns);
-double controller_tomicrons (struct config_axis *axis, double steps);
 
 #define OPTIONS "+c:hdf"
 static const struct option longopts[] = {
