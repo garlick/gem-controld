@@ -57,13 +57,10 @@ struct prog_context {
     struct motion *d;
     struct ev_loop *loop;
     bool stopped;
-    bool zeroed;
     bool west;
 };
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
-int set_origin (struct motion *t, struct motion *d);
-int init_origin (struct motion *t, struct motion *d);
 int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
@@ -164,8 +161,6 @@ int main (int argc, char *argv[])
 
     ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
     ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
-    if ((ctx.zeroed = init_origin (ctx.t, ctx.d)) < 0)
-        err_exit ("init_origin");
     if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
         err_exit ("init_stopped");
 
@@ -217,36 +212,6 @@ int init_stopped (struct motion *t, struct motion *d)
     return (a == 0 && b == 0);
 }
 
-/* The green LED goes off after the axes are zeroed
- * by calling set_origin() - M1 + M2 buttons on the handpad.
- * The LED state which lives in the motion controller
- * persists across a daemon restart, so get the initial
- * state of zeroed/not zeroed by reading the LED state.
- */
-
-int init_origin (struct motion *t, struct motion *d)
-{
-    uint8_t a, b;
-    if (motion_get_port (t, &a) < 0)
-        return -1;
-    if (motion_get_port (d, &b) < 0)
-        return -1;
-    return ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
-}
-
-int set_origin (struct motion *t, struct motion *d)
-{
-    if (motion_set_origin (t) < 0)
-        return -1;
-    if (motion_set_origin (d) < 0)
-        return -1;
-    if (motion_set_port (t, GREEN_LED_MASK) < 0)
-        return -1;
-    if (motion_set_port (d, GREEN_LED_MASK) < 0)
-        return -1;
-    return 0;
-}
-
 struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 {
     struct motion *m;
@@ -287,7 +252,7 @@ void hpad_cb (struct hpad *h, void *arg)
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
             int v = 0;
-            if (!ctx->stopped && ctx->zeroed)
+            if (!ctx->stopped)
                 v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
@@ -323,11 +288,7 @@ void hpad_cb (struct hpad *h, void *arg)
                 err ("t: set velocity");
             break;
         }
-        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
-            if (set_origin (ctx->t, ctx->d) < 0)
-                err ("set origin");
-            ctx->stopped = true;
-            ctx->zeroed = true;
+        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* not assigned*/
             break;
         case HPAD_KEY_M1: /* unused */
             break;
@@ -353,7 +314,7 @@ void guide_cb (struct guide *g, void *arg)
 
     if (val == GUIDE_NONE) {
         int vx = 0;
-        if (!ctx->stopped && ctx->zeroed)
+        if (!ctx->stopped)
             vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
         if (motion_set_velocity (ctx->t, vx) < 0)
             err ("t: set velocity");
