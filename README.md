@@ -13,14 +13,20 @@ computer running Linux, a custom interface "cape" with two
 The electronics are packaged in a 7x7x5 DIN rail enclosure that mounts to
 the telescope pier.
 
+Software is based on reactive (event-driven) programming, with the goal
+of keeping complexity down and separation of concerns among modules up.
+
 ### status
 
 The handbox can be used to slew the telescope in two speeds, and the RA axis
 tracks at a fixed sidereal rate.
 
 A Tangent BBOX style network interface allows the telescope to be synchronized
-to the SkySafari iPad app, as though it were "push-to" scope with encoders.
+to the Sky Safari iPad app, as though it were "push-to" scope with encoders.
 
 Autoguiding on an ST-4 interface works.
 
-Later: goto interface to SkySafari, KStars, or TheSky.
+### future plans
+
+Implement a goto interface that works with Sky Safari and other applications,
+such as the LX200 protocol.

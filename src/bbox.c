@@ -61,7 +61,8 @@ struct bbox {
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     int x, y;
-    int x_max, y_max;
+    int x_res, y_res;
+    double x_scale, y_scale;
     struct ev_loop *loop;
 };
 
@@ -82,7 +83,8 @@ static int write_all (int fd, char *buf, int len)
 
 static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct client *c = (struct client *)((char *)w - offsetof (struct client, w));
+    struct client *c = (struct client *)((char *)w
+                        - offsetof (struct client, w));
     int n;
 
     n = read (c->fd, c->buf + c->len, sizeof (c->buf) - c->len);
@@ -101,14 +103,13 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
     /* get device position
      * > Q
      * < +04512\t-01297\r         ; encoder X followed by encoder Y (13b + \r)
-     * N.B. Multiple Q characters are sometimes sent in a row to "wake up" the device,
-     * so allow up to MAX_COMMAND_BYTES of them to be treated as on "Q" command.
-    */
+     * N.B. Multiple Q characters are sometimes sent in a row to "wake up"
+     * the device, so allow up to MAX_COMMAND_BYTES of them to be treated
+     * as on "Q" command.
+     */
     if (c->len >= 1 && c->buf[0] == 'Q') {
         char buf[32];
 
-        if ((c->bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: matched Q command", __FUNCTION__, c->num);
         if (c->bb->cb)
             c->bb->cb (c->bb, c->bb->cb_arg);
         snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r", c->bb->x, c->bb->y);
@@ -126,9 +127,8 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
     if (c->len >= 1 && c->buf[0] == 'H') {
         char buf[32];
 
-        if ((c->bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: matched H command", __FUNCTION__, c->num);
-        snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r", c->bb->x_max, c->bb->y_max);
+        snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r",
+                  c->bb->x_res, c->bb->y_res);
         if (write_all (c->fd, buf, strlen (buf)) < 0) {
             err ("%s[%d]: write error", __FUNCTION__, c->num);
             goto disconnect;
@@ -184,7 +184,8 @@ static struct client *client_alloc (struct bbox *bb, int fd)
  */
 static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct bbox *bb = (struct bbox *)((char *)w - offsetof (struct bbox, listen_w));
+    struct bbox *bb = (struct bbox *)((char *)w
+                        - offsetof (struct bbox, listen_w));
 
     if ((revents & EV_ERROR)) {
     }
@@ -198,23 +199,39 @@ static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
             close (cfd);
             return;
         }
-        if ((bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: client starting", __FUNCTION__, c->num);
     }
 }
 
+/* N.B. Try to mimic 16-bit Tangent/BBOX limitations.
+ * Keep values well under +/-32K to avoid under/overflow issues,
+ * or exceeding 5 digits of precision on the wire.
+ */
+static int scale_resolution (int res, double *scale)
+{
+    if (res < 16384) {
+        *scale = 1.;
+    }
+    else {
+        *scale = 16384. / res;
+        res = 16384;
+    }
+    return res;
+}
+
+/* Resolution is the number of steps in 360 degree rotation.
+ * The angle in degrees is 360 * (position / resolution)
+ */
 void bbox_set_resolution (struct bbox *bb, int x, int y)
 {
-    bb->x_max = x;
-    bb->y_max = y;
+    bb->x_res = scale_resolution (labs (x), &bb->x_scale);
+    bb->y_res = scale_resolution (labs (y), &bb->y_scale);;
 }
 
 void bbox_set_position (struct bbox *bb, int x, int y)
 {
-    bb->x = x;
-    bb->y = y;
+    bb->x = bb->x_scale * x;
+    bb->y = bb->y_scale * y;
 }
-
 
 int bbox_init (struct bbox *bb, int port, bbox_cb_t cb, void *arg, int flags)
 {

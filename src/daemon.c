@@ -22,13 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* Note: in this module, (t,d) refers to raw telescope postion in
- * arcseconds.  Origin is (0,324000), roughly (LHA,DEC) = (0,+90),
- * telescope on west side of pier.
- *
- * (x,y) refers to telescope position in whole steps.  Origin (0,0).
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -63,24 +56,19 @@ struct prog_context {
     struct motion *t;
     struct motion *d;
     struct ev_loop *loop;
-    bool stopped;
-    bool zeroed;
+    bool t_tracking;
+    bool west;
 };
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
-int set_origin (struct motion *t, struct motion *d);
-int init_origin (struct motion *t, struct motion *d);
-int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
-double controller_fromarcsec (struct config_axis *axis, double arcsec);
-double controller_toarcsec (struct config_axis *axis, double steps);
 
-#define OPTIONS "+c:hMBHGf"
+#define OPTIONS "+c:hMBHGwf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
@@ -88,6 +76,7 @@ static const struct option longopts[] = {
     {"debug-bbox",           no_argument,       0, 'B'},
     {"debug-hpad",           no_argument,       0, 'H'},
     {"debug-guide",          no_argument,       0, 'G'},
+    {"west",                 no_argument,       0, 'w'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -97,6 +86,7 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
+"    -w,--west           observe west of meridian (scope east of pier)\n"
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -B,--debug-bbox     emit bbox protocol to stderr\n"
 "    -H,--debug-hpad     emit hpad events to stderr\n"
@@ -150,6 +140,9 @@ int main (int argc, char *argv[])
             case 'f':   /* --force */
                 motion_flags |= MOTION_RESET;
                 break;
+            case 'w':   /* --west */
+                ctx.west = true;
+                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -167,10 +160,17 @@ int main (int argc, char *argv[])
 
     ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
     ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
-    if ((ctx.zeroed = init_origin (ctx.t, ctx.d)) < 0)
-        err_exit ("init_origin");
-    if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
-        err_exit ("init_stopped");
+
+    /* Initialize t_tracking state from actual state of t motion controller.
+     * If the daemon was restarted, we should retain this state.
+     */
+    uint8_t t_status;
+    if (motion_get_status (ctx.t, &t_status) < 0)
+        err_exit ("motion_get_status t");
+    if (t_status != 0)
+        ctx.t_tracking = true;
+    msg ("tracking in RA is %s - press handpad M2 button to toggle",
+          ctx.t_tracking ? "enabled" : "disabled");
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
@@ -210,46 +210,6 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int init_stopped (struct motion *t, struct motion *d)
-{
-    uint8_t a, b;
-    if (motion_get_status (t, &a) < 0)
-        return -1;
-    if (motion_get_status (d, &b) < 0)
-        return -1;
-    return (a == 0 && b == 0);
-}
-
-/* The green LED goes off after the axes are zeroed
- * by calling set_origin() - M1 + M2 buttons on the handpad.
- * The LED state which lives in the motion controller
- * persists across a daemon restart, so get the initial
- * state of zeroed/not zeroed by reading the LED state.
- */
-
-int init_origin (struct motion *t, struct motion *d)
-{
-    uint8_t a, b;
-    if (motion_get_port (t, &a) < 0)
-        return -1;
-    if (motion_get_port (d, &b) < 0)
-        return -1;
-    return ((a & GREEN_LED_MASK) != 0 && (b & GREEN_LED_MASK) != 0);
-}
-
-int set_origin (struct motion *t, struct motion *d)
-{
-    if (motion_set_origin (t) < 0)
-        return -1;
-    if (motion_set_origin (d) < 0)
-        return -1;
-    if (motion_set_port (t, GREEN_LED_MASK) < 0)
-        return -1;
-    if (motion_set_port (d, GREEN_LED_MASK) < 0)
-        return -1;
-    return 0;
-}
-
 struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 {
     struct motion *m;
@@ -272,6 +232,9 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
             err_exit ("%s: set initial velocity", name);
         if (motion_set_final_velocity (m, a->finalv) < 0)
             err_exit ("%s: set final velocity", name);
+        if (motion_set_port (m, GREEN_LED_MASK | WHITE_LED_MASK
+                                               | BLUE_LED_MASK) < 0)
+            err_exit ("%s: motion set port", name);
     }
     return m;
 }
@@ -289,53 +252,49 @@ void hpad_cb (struct hpad *h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            int vx = 0;
-            if (!ctx->stopped && ctx->zeroed)
-                vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
-            if (motion_set_velocity (ctx->t, vx) < 0)
+            int v = 0;
+            if (ctx->t_tracking)
+                v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_NORTH: {
+        case HPAD_KEY_NORTH: { // DEC+
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_SOUTH: {
+        case HPAD_KEY_SOUTH: { // DEC-
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_WEST: {
+        case HPAD_KEY_EAST: { // RA+
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
-        case HPAD_KEY_EAST: {
+        case HPAD_KEY_WEST: { // RA-
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             break;
         }
-        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
-            if (set_origin (ctx->t, ctx->d) < 0)
-                err ("set origin");
-            ctx->stopped = true;
-            ctx->zeroed = true;
+        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* not assigned*/
             break;
         case HPAD_KEY_M1: /* unused */
             break;
-        case HPAD_KEY_M2: /* toggle stop */
-            ctx->stopped = !ctx->stopped;
+        case HPAD_KEY_M2: /* toggle tracking (key release updates motion) */
+            ctx->t_tracking = !ctx->t_tracking;
             break;
     }
 }
@@ -355,10 +314,10 @@ void guide_cb (struct guide *g, void *arg)
     }
 
     if (val == GUIDE_NONE) {
-        int vx = 0;
-        if (!ctx->stopped && ctx->zeroed)
-            vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
-        if (motion_set_velocity (ctx->t, vx) < 0)
+        int v = 0;
+        if (ctx->t_tracking)
+            v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+        if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
@@ -375,12 +334,12 @@ void guide_cb (struct guide *g, void *arg)
         }
         if ((val & GUIDE_RA_PLUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & GUIDE_RA_MINUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
     }
@@ -391,31 +350,17 @@ void guide_cb (struct guide *g, void *arg)
 void bbox_cb (struct bbox *bb, void *arg)
 {
     struct prog_context *ctx = arg;
-    double x, y;
+    double t, d;
 
-    if (motion_get_position (ctx->t, &x) < 0) {
+    if (motion_get_position (ctx->t, &t) < 0) {
         err ("%s: error reading t position", __FUNCTION__);
         return;
     }
-    if (motion_get_position (ctx->d, &y) < 0) {
+    if (motion_get_position (ctx->d, &d) < 0) {
         err ("%s: error reading d position", __FUNCTION__);
         return;
     }
-    bbox_set_position (bb, (int)x, (int)y);
-}
-
-/* Return position in arcsec from controller steps
- */
-double controller_toarcsec (struct config_axis *axis, double steps)
-{
-    return steps * (360.0*60*60) / axis->steps + axis->offset;
-}
-
-/* Calculate position in steps for motion controller from arcsec.
- */
-double controller_fromarcsec (struct config_axis *axis, double arcsec)
-{
-    return (arcsec - axis->offset) * axis->steps / (360.0*60*60);
+    bbox_set_position (bb, ctx->west ? t : -1*t, d);
 }
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
