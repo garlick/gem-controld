@@ -278,14 +278,14 @@ void hpad_cb (struct hpad *h, void *arg)
         case HPAD_KEY_EAST: { // RA+
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
         case HPAD_KEY_WEST: { // RA-
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             break;
         }
@@ -314,10 +314,10 @@ void guide_cb (struct guide *g, void *arg)
     }
 
     if (val == GUIDE_NONE) {
-        int vx = 0;
+        int v = 0;
         if (ctx->t_tracking)
-            vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
-        if (motion_set_velocity (ctx->t, vx) < 0)
+            v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+        if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
@@ -334,12 +334,12 @@ void guide_cb (struct guide *g, void *arg)
         }
         if ((val & GUIDE_RA_PLUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & GUIDE_RA_MINUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
     }
