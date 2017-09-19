@@ -77,14 +77,6 @@ static int config_axis (struct config_axis *a, const char *name, const char *val
         a->decel = strtoul (value, NULL, 10);
     else if (!strcmp (name, "steps"))
         a->steps = strtoul (value, NULL, 10);
-    else if (!strcmp (name, "offset"))
-        a->offset = strtol (value, NULL, 10);
-    else if (!strcmp (name, "park"))
-        a->park = strtol (value, NULL, 10);
-    else if (!strcmp (name, "low_limit"))
-        a->low_limit = strtol (value, NULL, 10);
-    else if (!strcmp (name, "high_limit"))
-        a->high_limit = strtol (value, NULL, 10);
     return rc;
 }
 

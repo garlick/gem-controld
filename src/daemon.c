@@ -22,13 +22,6 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* Note: in this module, (t,d) refers to raw telescope postion in
- * arcseconds.  Origin is (0,324000), roughly (LHA,DEC) = (0,+90),
- * telescope on west side of pier.
- *
- * (x,y) refers to telescope position in whole steps.  Origin (0,0).
- */
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -77,8 +70,6 @@ void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
-double controller_fromarcsec (struct config_axis *axis, double arcsec);
-double controller_toarcsec (struct config_axis *axis, double steps);
 
 #define OPTIONS "+c:hMBHGf"
 static const struct option longopts[] = {
@@ -402,20 +393,6 @@ void bbox_cb (struct bbox *bb, void *arg)
         return;
     }
     bbox_set_position (bb, (int)x, (int)y);
-}
-
-/* Return position in arcsec from controller steps
- */
-double controller_toarcsec (struct config_axis *axis, double steps)
-{
-    return steps * (360.0*60*60) / axis->steps + axis->offset;
-}
-
-/* Calculate position in steps for motion controller from arcsec.
- */
-double controller_fromarcsec (struct config_axis *axis, double arcsec)
-{
-    return (arcsec - axis->offset) * axis->steps / (360.0*60*60);
 }
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.

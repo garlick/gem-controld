@@ -13,10 +13,6 @@ struct config_axis {
     int steps;
     double slow;
     double fast;
-    int offset;
-    int park;
-    int high_limit;
-    int low_limit;
 };
 
 struct config {
