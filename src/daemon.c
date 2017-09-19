@@ -43,6 +43,7 @@
 #include "hpad.h"
 #include "guide.h"
 #include "bbox.h"
+#include "lx200.h"
 
 const double sidereal_velocity = 15.0417; /* arcsec/sec */
 
@@ -53,6 +54,7 @@ struct prog_context {
     struct hpad *hpad;
     struct guide *guide;
     struct bbox *bbox;
+    struct lx200 *lx200;
     struct motion *t;
     struct motion *d;
     struct ev_loop *loop;
@@ -65,15 +67,18 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags);
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
+void lx200_pos_cb (struct lx200 *lx, void *arg);
+void lx200_slew_cb (struct lx200 *lx, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 
-#define OPTIONS "+c:hMBHGwf"
+#define OPTIONS "+c:hMBLHGwf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
     {"debug-motion",         no_argument,       0, 'M'},
     {"debug-bbox",           no_argument,       0, 'B'},
+    {"debug-lx200",          no_argument,       0, 'L'},
     {"debug-hpad",           no_argument,       0, 'H'},
     {"debug-guide",          no_argument,       0, 'G'},
     {"west",                 no_argument,       0, 'w'},
@@ -89,6 +94,7 @@ static void usage (void)
 "    -w,--west           observe west of meridian (scope east of pier)\n"
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -B,--debug-bbox     emit bbox protocol to stderr\n"
+"    -L,--debug-lx200    emit lx200 protocol to stderr\n"
 "    -H,--debug-hpad     emit hpad events to stderr\n"
 "    -G,--debug-guide    emit guide pulse events to stderr\n"
 "    -f,--force          force motion controller reset (must reset origin)\n"
@@ -105,6 +111,7 @@ int main (int argc, char *argv[])
     int bbox_flags = 0;
     int hpad_flags = 0;
     int guide_flags = 0;
+    int lx200_flags = 0;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -130,6 +137,9 @@ int main (int argc, char *argv[])
                 break;
             case 'B':   /* --debug-bbox */
                 bbox_flags |= BBOX_DEBUG;
+                break;
+            case 'L':   /* --debug-lx200 */
+                bbox_flags |= LX200_DEBUG;
                 break;
             case 'H':   /* --debug-hpad */
                 hpad_flags |= HPAD_DEBUG;
@@ -190,11 +200,22 @@ int main (int argc, char *argv[])
     bbox_set_resolution (ctx.bbox, ctx.opt.t.steps, ctx.opt.d.steps);
     bbox_start (ctx.loop, ctx.bbox);
 
+    ctx.lx200 = lx200_new ();
+    if (lx200_init (ctx.lx200, DEFAULT_LX200_PORT, lx200_flags) < 0)
+        err_exit ("bbox_init");
+    lx200_set_resolution (ctx.lx200, ctx.opt.t.steps, ctx.opt.d.steps);
+    lx200_set_position_cb (ctx.lx200, lx200_pos_cb, &ctx);
+    lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
+    lx200_start (ctx.loop, ctx.lx200);
+
     ev_run (ctx.loop, 0);
     ev_loop_destroy (ctx.loop);
 
     bbox_stop (ctx.loop, ctx.bbox);
     bbox_destroy (ctx.bbox);
+
+    lx200_stop (ctx.loop, ctx.lx200);
+    lx200_destroy (ctx.lx200);
 
     guide_stop (ctx.loop, ctx.guide);
     guide_destroy (ctx.guide);
@@ -362,6 +383,65 @@ void bbox_cb (struct bbox *bb, void *arg)
     }
     bbox_set_position (bb, ctx->west ? t : -1*t, d);
 }
+
+/* LX200 protocol requests that we update position.
+ */
+void lx200_pos_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    double t, d;
+
+    if (motion_get_position (ctx->t, &t) < 0) {
+        err ("%s: error reading t position", __FUNCTION__);
+        return;
+    }
+    if (motion_get_position (ctx->d, &d) < 0) {
+        err ("%s: error reading d position", __FUNCTION__);
+        return;
+    }
+    lx200_set_position (lx, ctx->west ? t : -1*t, d);
+}
+
+/* LX200 protocol notifies us that slew "button" events
+ * have occurred.
+ */
+void lx200_slew_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    int val = lx200_get_slew (lx);
+
+    if (val == LX200_SLEW_NONE) {
+        int v = 0;
+        if (ctx->t_tracking)
+            v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+        if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
+            err ("t: set velocity");
+        if (motion_set_velocity (ctx->d, 0) < 0)
+            err ("d: set velocity");
+    } else {
+        if ((val & LX200_SLEW_NORTH)) { //DEC+
+            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.fast);
+            if (motion_set_velocity (ctx->d, v) < 0)
+                err ("d: set velocity");
+        }
+        else if ((val & LX200_SLEW_SOUTH)) { // DEC-
+            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.fast);
+            if (motion_set_velocity (ctx->d, -1*v) < 0)
+                err ("d: set velocity");
+        }
+        if ((val & LX200_SLEW_EAST)) { // RA+
+            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.fast);
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
+                err ("t: set velocity");
+        }
+        else if ((val & LX200_SLEW_WEST)) { // RA-
+            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.fast);
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
+                err ("t: set velocity");
+        }
+    }
+}
+
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
  * Take into account controller velocity scaling in 'auto' mode.
