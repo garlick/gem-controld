@@ -82,7 +82,8 @@ static int write_all (int fd, char *buf, int len)
 
 static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct client *c = (struct client *)((char *)w - offsetof (struct client, w));
+    struct client *c = (struct client *)((char *)w
+                        - offsetof (struct client, w));
     int n;
 
     n = read (c->fd, c->buf + c->len, sizeof (c->buf) - c->len);
@@ -101,9 +102,10 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
     /* get device position
      * > Q
      * < +04512\t-01297\r         ; encoder X followed by encoder Y (13b + \r)
-     * N.B. Multiple Q characters are sometimes sent in a row to "wake up" the device,
-     * so allow up to MAX_COMMAND_BYTES of them to be treated as on "Q" command.
-    */
+     * N.B. Multiple Q characters are sometimes sent in a row to "wake up"
+     * the device, so allow up to MAX_COMMAND_BYTES of them to be treated
+     * as on "Q" command.
+     */
     if (c->len >= 1 && c->buf[0] == 'Q') {
         char buf[32];
 
@@ -128,7 +130,8 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
 
         if ((c->bb->flags & BBOX_DEBUG))
             msg ("%s[%d]: matched H command", __FUNCTION__, c->num);
-        snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r", c->bb->x_max, c->bb->y_max);
+        snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r",
+                  c->bb->x_max, c->bb->y_max);
         if (write_all (c->fd, buf, strlen (buf)) < 0) {
             err ("%s[%d]: write error", __FUNCTION__, c->num);
             goto disconnect;
@@ -184,7 +187,8 @@ static struct client *client_alloc (struct bbox *bb, int fd)
  */
 static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct bbox *bb = (struct bbox *)((char *)w - offsetof (struct bbox, listen_w));
+    struct bbox *bb = (struct bbox *)((char *)w
+                        - offsetof (struct bbox, listen_w));
 
     if ((revents & EV_ERROR)) {
     }
