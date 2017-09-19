@@ -110,8 +110,6 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
     if (c->len >= 1 && c->buf[0] == 'Q') {
         char buf[32];
 
-        if ((c->bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: matched Q command", __FUNCTION__, c->num);
         if (c->bb->cb)
             c->bb->cb (c->bb, c->bb->cb_arg);
         snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r", c->bb->x, c->bb->y);
@@ -129,8 +127,6 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
     if (c->len >= 1 && c->buf[0] == 'H') {
         char buf[32];
 
-        if ((c->bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: matched H command", __FUNCTION__, c->num);
         snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r",
                   c->bb->x_res, c->bb->y_res);
         if (write_all (c->fd, buf, strlen (buf)) < 0) {
@@ -203,8 +199,6 @@ static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
             close (cfd);
             return;
         }
-        if ((bb->flags & BBOX_DEBUG))
-            msg ("%s[%d]: client starting", __FUNCTION__, c->num);
     }
 }
 
