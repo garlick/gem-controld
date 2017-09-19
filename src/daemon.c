@@ -56,12 +56,11 @@ struct prog_context {
     struct motion *t;
     struct motion *d;
     struct ev_loop *loop;
-    bool stopped;
+    bool t_tracking;
     bool west;
 };
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
-int init_stopped (struct motion *t, struct motion *d);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
@@ -161,8 +160,17 @@ int main (int argc, char *argv[])
 
     ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
     ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
-    if ((ctx.stopped = init_stopped (ctx.t, ctx.d)) < 0)
-        err_exit ("init_stopped");
+
+    /* Initialize t_tracking state from actual state of t motion controller.
+     * If the daemon was restarted, we should retain this state.
+     */
+    uint8_t t_status;
+    if (motion_get_status (ctx.t, &t_status) < 0)
+        err_exit ("motion_get_status t");
+    if (t_status != 0)
+        ctx.t_tracking = true;
+    msg ("tracking in RA is %s - press handpad M2 button to toggle",
+          ctx.t_tracking ? "enabled" : "disabled");
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
@@ -202,16 +210,6 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-int init_stopped (struct motion *t, struct motion *d)
-{
-    uint8_t a, b;
-    if (motion_get_status (t, &a) < 0)
-        return -1;
-    if (motion_get_status (d, &b) < 0)
-        return -1;
-    return (a == 0 && b == 0);
-}
-
 struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 {
     struct motion *m;
@@ -234,6 +232,9 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
             err_exit ("%s: set initial velocity", name);
         if (motion_set_final_velocity (m, a->finalv) < 0)
             err_exit ("%s: set final velocity", name);
+        if (motion_set_port (m, GREEN_LED_MASK | WHITE_LED_MASK
+                                               | BLUE_LED_MASK) < 0)
+            err_exit ("%s: motion set port", name);
     }
     return m;
 }
@@ -252,7 +253,7 @@ void hpad_cb (struct hpad *h, void *arg)
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
             int v = 0;
-            if (!ctx->stopped)
+            if (ctx->t_tracking)
                 v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
@@ -292,8 +293,8 @@ void hpad_cb (struct hpad *h, void *arg)
             break;
         case HPAD_KEY_M1: /* unused */
             break;
-        case HPAD_KEY_M2: /* toggle stop */
-            ctx->stopped = !ctx->stopped;
+        case HPAD_KEY_M2: /* toggle tracking (key release updates motion) */
+            ctx->t_tracking = !ctx->t_tracking;
             break;
     }
 }
@@ -314,7 +315,7 @@ void guide_cb (struct guide *g, void *arg)
 
     if (val == GUIDE_NONE) {
         int vx = 0;
-        if (!ctx->stopped)
+        if (ctx->t_tracking)
             vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
         if (motion_set_velocity (ctx->t, vx) < 0)
             err ("t: set velocity");
