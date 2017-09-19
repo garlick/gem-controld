@@ -61,7 +61,8 @@ struct bbox {
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     int x, y;
-    int x_max, y_max;
+    int x_res, y_res;
+    double x_scale, y_scale;
     struct ev_loop *loop;
 };
 
@@ -131,7 +132,7 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
         if ((c->bb->flags & BBOX_DEBUG))
             msg ("%s[%d]: matched H command", __FUNCTION__, c->num);
         snprintf (buf, sizeof (buf), "%+.5d\t%+.5d\r",
-                  c->bb->x_max, c->bb->y_max);
+                  c->bb->x_res, c->bb->y_res);
         if (write_all (c->fd, buf, strlen (buf)) < 0) {
             err ("%s[%d]: write error", __FUNCTION__, c->num);
             goto disconnect;
@@ -207,18 +208,36 @@ static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
     }
 }
 
+/* N.B. Try to mimic 16-bit Tangent/BBOX limitations.
+ * Keep values well under +/-32K to avoid under/overflow issues,
+ * or exceeding 5 digits of precision on the wire.
+ */
+static int scale_resolution (int res, double *scale)
+{
+    if (res < 16384) {
+        *scale = 1.;
+    }
+    else {
+        *scale = 16384. / res;
+        res = 16384;
+    }
+    return res;
+}
+
+/* Resolution is the number of steps in 360 degree rotation.
+ * The angle in degrees is 360 * (position / resolution)
+ */
 void bbox_set_resolution (struct bbox *bb, int x, int y)
 {
-    bb->x_max = x;
-    bb->y_max = y;
+    bb->x_res = scale_resolution (labs (x), &bb->x_scale);
+    bb->y_res = scale_resolution (labs (y), &bb->y_scale);;
 }
 
 void bbox_set_position (struct bbox *bb, int x, int y)
 {
-    bb->x = x;
-    bb->y = y;
+    bb->x = bb->x_scale * x;
+    bb->y = bb->y_scale * y;
 }
-
 
 int bbox_init (struct bbox *bb, int port, bbox_cb_t cb, void *arg, int flags)
 {
