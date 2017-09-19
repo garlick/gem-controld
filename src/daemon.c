@@ -58,6 +58,7 @@ struct prog_context {
     struct ev_loop *loop;
     bool stopped;
     bool zeroed;
+    bool west;
 };
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags);
@@ -71,7 +72,7 @@ void bbox_cb (struct bbox *bb, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 
-#define OPTIONS "+c:hMBHGf"
+#define OPTIONS "+c:hMBHGwf"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
@@ -79,6 +80,7 @@ static const struct option longopts[] = {
     {"debug-bbox",           no_argument,       0, 'B'},
     {"debug-hpad",           no_argument,       0, 'H'},
     {"debug-guide",          no_argument,       0, 'G'},
+    {"west",                 no_argument,       0, 'w'},
     {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
@@ -88,6 +90,7 @@ static void usage (void)
     fprintf (stderr,
 "Usage: gem [OPTIONS]\n"
 "    -c,--config FILE    set path to config file\n"
+"    -w,--west           observe west of meridian (scope east of pier)\n"
 "    -M,--debug-motion   emit motion control commands and responses to stderr\n"
 "    -B,--debug-bbox     emit bbox protocol to stderr\n"
 "    -H,--debug-hpad     emit hpad events to stderr\n"
@@ -140,6 +143,9 @@ int main (int argc, char *argv[])
                 break;
             case 'f':   /* --force */
                 motion_flags |= MOTION_RESET;
+                break;
+            case 'w':   /* --west */
+                ctx.west = true;
                 break;
             case 'h':   /* --help */
             default:
@@ -280,40 +286,40 @@ void hpad_cb (struct hpad *h, void *arg)
     bool fast = (val & HPAD_MASK_FAST);
     switch (val & HPAD_MASK_KEYS) {
         case HPAD_KEY_NONE: {
-            int vx = 0;
+            int v = 0;
             if (!ctx->stopped && ctx->zeroed)
-                vx = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
-            if (motion_set_velocity (ctx->t, vx) < 0)
+                v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_NORTH: {
+        case HPAD_KEY_NORTH: { // DEC+
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_SOUTH: {
+        case HPAD_KEY_SOUTH: { // DEC-
             int v = controller_vfromarcsec (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
             break;
         }
-        case HPAD_KEY_WEST: {
+        case HPAD_KEY_EAST: { // RA+
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             break;
         }
-        case HPAD_KEY_EAST: {
+        case HPAD_KEY_WEST: { // RA-
             int v = controller_vfromarcsec (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
@@ -366,12 +372,12 @@ void guide_cb (struct guide *g, void *arg)
         }
         if ((val & GUIDE_RA_PLUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & GUIDE_RA_MINUS)) {
             int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
-            if (motion_set_velocity (ctx->t, -1*v) < 0)
+            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
     }
@@ -382,17 +388,17 @@ void guide_cb (struct guide *g, void *arg)
 void bbox_cb (struct bbox *bb, void *arg)
 {
     struct prog_context *ctx = arg;
-    double x, y;
+    double t, d;
 
-    if (motion_get_position (ctx->t, &x) < 0) {
+    if (motion_get_position (ctx->t, &t) < 0) {
         err ("%s: error reading t position", __FUNCTION__);
         return;
     }
-    if (motion_get_position (ctx->d, &y) < 0) {
+    if (motion_get_position (ctx->d, &d) < 0) {
         err ("%s: error reading d position", __FUNCTION__);
         return;
     }
-    bbox_set_position (bb, (int)x, (int)y);
+    bbox_set_position (bb, ctx->west ? t : -1*t, d);
 }
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
