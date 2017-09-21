@@ -203,7 +203,6 @@ int main (int argc, char *argv[])
     ctx.lx200 = lx200_new ();
     if (lx200_init (ctx.lx200, DEFAULT_LX200_PORT, lx200_flags) < 0)
         err_exit ("bbox_init");
-    lx200_set_resolution (ctx.lx200, ctx.opt.t.steps, ctx.opt.d.steps);
     lx200_set_position_cb (ctx.lx200, lx200_pos_cb, &ctx);
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
     lx200_start (ctx.loop, ctx.lx200);
@@ -390,6 +389,7 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
     double t, d;
+    double t_degrees, d_degrees;
 
     if (motion_get_position (ctx->t, &t) < 0) {
         err ("%s: error reading t position", __FUNCTION__);
@@ -399,7 +399,9 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
         err ("%s: error reading d position", __FUNCTION__);
         return;
     }
-    lx200_set_position (lx, ctx->west ? t : -1*t, d);
+    t_degrees = 360.0 * (t / ctx->opt.t.steps);
+    d_degrees = 360.0 * (d / ctx->opt.d.steps);
+    lx200_set_position (lx, ctx->west ? t_degrees : -1*t_degrees, d_degrees);
 }
 
 /* LX200 protocol notifies us that slew "button" events

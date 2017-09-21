@@ -97,7 +97,6 @@ int main (int argc, char *argv[])
     lx200_set_position_cb (lx, lx200_pos_cb, NULL);
     lx200_set_slew_cb (lx, lx200_slew_cb, NULL);
     lx200_start (loop, lx);
-    lx200_set_resolution (lx, 8192, 4096);
     msg ("lx200 configured");
 
     ev_run (loop, 0);
@@ -112,7 +111,7 @@ int main (int argc, char *argv[])
 
 void lx200_pos_cb (struct lx200 *lx, void *arg)
 {
-    lx200_set_position (lx, 42, 84);
+    lx200_set_position (lx, 0., 0.);
 }
 
 void lx200_slew_cb (struct lx200 *lx, void *arg)
