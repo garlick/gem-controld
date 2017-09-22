@@ -9,7 +9,7 @@ LIBS  = -L$(abs_topdir)/libini -lini \
 	-lpthread -lev -lm -lrt -lnova
 
 OBJS = configfile.o xzmalloc.o log.o gpio.o hpad.o guide.o motion.o \
-	bbox.o lx200.o util.o
+	bbox.o lx200.o point.o
 
 all: $(PROGS)
 

@@ -75,7 +75,7 @@
 
 #include "log.h"
 #include "xzmalloc.h"
-#include "util.h"
+#include "point.h"
 
 #include "lx200.h"
 
@@ -107,7 +107,7 @@ struct lx200 {
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
-    struct util *util;
+    struct point *point;
     struct ev_loop *loop;
 };
 
@@ -160,7 +160,7 @@ static int process_command (struct client *c, const char *cmd)
     if (!strncmp (cmd, ":St", 3)) {
         int deg, min;
         if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_latitude (c->lx->util, deg, min, 0.);
+            point_set_latitude (c->lx->point, deg, min, 0.);
             rc = write_all (c, "1", 1);
         }
         else
@@ -171,7 +171,7 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sg", 3)) {
         int deg, min;
         if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_longitude (c->lx->util, deg, min, 0.);
+            point_set_longitude (c->lx->point, deg, min, 0.);
             rc = write_all (c, "1", 1);
         }
         else
@@ -204,8 +204,8 @@ static int process_command (struct client *c, const char *cmd)
         double sec;
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_get_position_ra (c->lx->util, &hr, &min, &sec);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_get_position_ra (c->lx->point, &hr, &min, &sec);
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
     /* :GD# - Get telescope DEC
@@ -215,8 +215,8 @@ static int process_command (struct client *c, const char *cmd)
         double sec;
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_get_position_dec (c->lx->util, &deg, &min, &sec);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_get_position_dec (c->lx->point, &deg, &min, &sec);
         rc = wpf (c, "%+.2d*%.2d'%.2d#", deg, min, (int)sec);
     }
     /* :Me#, :Mw#, :Mn#, or :Ms# - slew east, west, north, or south
@@ -247,11 +247,11 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sr", 3)) {
         int hr, min, sec, tenths;
         if (sscanf (cmd + 3, "%d:%d:%d#", &hr, &min, &sec) == 3) {
-            util_set_target_ra (c->lx->util, hr, min, sec);
+            point_set_target_ra (c->lx->point, hr, min, sec);
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d:%d.%d#", &hr, &min, &tenths) == 2) {
-            util_set_target_dec (c->lx->util, hr, min, 6*tenths);
+            point_set_target_dec (c->lx->point, hr, min, 6*tenths);
             rc = write_all (c, "1", 1);
         }
         else
@@ -262,11 +262,11 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sd", 3)) {
         int deg, min, sec;
         if (sscanf (cmd + 3, "%d*%d:%d#", &deg, &min, &sec) == 3) {
-            util_set_target_dec (c->lx->util, deg, min, sec);
+            point_set_target_dec (c->lx->point, deg, min, sec);
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_target_dec (c->lx->util, deg, min, 0);
+            point_set_target_dec (c->lx->point, deg, min, 0);
             rc = write_all (c, "1", 1);
         }
         else
@@ -277,8 +277,8 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":CM#")) {
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_sync_target (c->lx->util);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_sync_target (c->lx->point);
         rc = wpf (c, "You Are Here#");
     }
     /* :MS# - slew to target object
@@ -469,7 +469,7 @@ int lx200_init (struct lx200 *lx, int port, int flags)
         msg ("listening on port %d", port);
 
     if ((lx->flags & LX200_DEBUG))
-        util_set_flags (lx->util, UTIL_DEBUG);
+        point_set_flags (lx->point, POINT_DEBUG);
 
     return 0;
 }
@@ -503,8 +503,8 @@ struct lx200 *lx200_new (void)
     struct lx200 *lx = xzmalloc (sizeof (*lx));
     int i;
 
-    if (!(lx->util = util_new ()))
-        err_exit ("util_create");
+    if (!(lx->point = point_new ()))
+        err_exit ("point_create");
 
     for (i = 0; i < MAX_CLIENTS; i++) {
         lx->clients[i].fd = -1;
