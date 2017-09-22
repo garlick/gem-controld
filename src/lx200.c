@@ -75,6 +75,7 @@
 
 #include "log.h"
 #include "xzmalloc.h"
+#include "util.h"
 
 #include "lx200.h"
 
@@ -104,9 +105,9 @@ struct lx200 {
     void *slew_cb_arg;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
-    int x, y;
-    int x_res, y_res;
+    double t, d; // axis angular position (degrees)
     int slew_mask;
+    struct util *util;
     struct ev_loop *loop;
 };
 
@@ -157,12 +158,24 @@ static int process_command (struct client *c, const char *cmd)
     /* :StsDD*MM# - Set site latitude to sDD*MM
      */
     if (!strncmp (cmd, ":St", 3)) {
-        rc = write_all (c, "1", 1);
+        int deg, min;
+        if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
+            util_set_latitude (c->lx->util, deg, min, 0.);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :SgDDD*MM# - Set site longitude to DDD*MM
      */
     else if (!strncmp (cmd, ":Sg", 3)) {
-        rc = write_all (c, "1", 1);
+        int deg, min;
+        if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
+            util_set_longitude (c->lx->util, deg, min, 0.);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :SGsHH.H# - Set num hours added to local time to yield UTC
      */
@@ -179,24 +192,32 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":SC", 3)) {
         rc = wpf (c, "1%s#", "Updating Planetary Data");
     }
-    /* :GR# - Get telescope RA
-     */
-    else if (!strcmp (cmd, ":GR#")) {
-        if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position
-        rc = wpf (c, "%.2d:%.2d:%.2d#", 0, 0, 0);
-    }
     /* :RM# - Set slew rate to Find Rate (2nd fastest)
      */
     else if (!strcmp (cmd, ":RM#")) {
         // no response
     }
+    /* :GR# - Get telescope RA
+     */
+    else if (!strcmp (cmd, ":GR#")) {
+        int hr, min;
+        double sec;
+        if (c->lx->pos_cb)
+            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        util_set_position (c->lx->util, c->lx->t, c->lx->d);
+        util_get_position_ra (c->lx->util, &hr, &min, &sec);
+        rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
+    }
     /* :GD# - Get telescope DEC
      */
     else if (!strcmp (cmd, ":GD#")) {
+        int deg, min;
+        double sec;
         if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position
-        rc = wpf (c, "%+.2d*%.2d'%.2d#", 0, 0, 0);
+            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        util_set_position (c->lx->util, c->lx->t, c->lx->d);
+        util_get_position_dec (c->lx->util, &deg, &min, &sec);
+        rc = wpf (c, "%+.2d*%.2d'%.2d#", deg, min, (int)sec);
     }
     /* :Me#, :Mw#, :Mn#, or :Ms# - slew east, west, north, or south
      * :Qe#, :Qw#, :Qn#, or :Qs# - stop slew in specified direction
@@ -224,17 +245,41 @@ static int process_command (struct client *c, const char *cmd)
     /* :SrHH:MM.T# or :SrHH:MM:SS# - set target object RA
      */
     else if (!strncmp (cmd, ":Sr", 3)) {
-        rc = write_all (c, "1", 1);
+        int hr, min, sec, tenths;
+        if (sscanf (cmd + 3, "%d:%d:%d#", &hr, &min, &sec) == 3) {
+            util_set_target_ra (c->lx->util, hr, min, sec);
+            rc = write_all (c, "1", 1);
+        }
+        else if (sscanf (cmd + 3, "%d:%d.%d#", &hr, &min, &tenths) == 2) {
+            util_set_target_dec (c->lx->util, hr, min, 6*tenths);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :SdsDD*MM# or :SdsDD*MM:SS# - set target object DEC
      */
     else if (!strncmp (cmd, ":Sd", 3)) {
-        rc = write_all (c, "1", 1);
+        int deg, min, sec;
+        if (sscanf (cmd + 3, "%d*%d:%d#", &deg, &min, &sec) == 3) {
+            util_set_target_dec (c->lx->util, deg, min, sec);
+            rc = write_all (c, "1", 1);
+        }
+        else if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
+            util_set_target_dec (c->lx->util, deg, min, 0);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :CM# - sync telescope's position with currently slected db object coord
      */
     else if (!strcmp (cmd, ":CM#")) {
-        rc = wpf (c, "Unknown object#");
+        if (c->lx->pos_cb)
+            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        util_set_position (c->lx->util, c->lx->t, c->lx->d);
+        util_sync_target (c->lx->util);
+        rc = wpf (c, "You Are Here#");
     }
     /* :MS# - slew to target object
      */
@@ -388,19 +433,10 @@ void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
     lx->slew_cb_arg = arg;
 }
 
-/* Resolution is the number of steps in 360 degree rotation.
- * The angle in degrees is 360 * (position / resolution)
- */
-void lx200_set_resolution (struct lx200 *lx, int x, int y)
+void lx200_set_position (struct lx200 *lx, double t, double d)
 {
-    lx->x_res = labs (x);
-    lx->y_res = labs (y);
-}
-
-void lx200_set_position (struct lx200 *lx, int x, int y)
-{
-    lx->x = x;
-    lx->y = y;
+    lx->t = t;
+    lx->d = d;
 }
 
 void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
@@ -431,6 +467,9 @@ int lx200_init (struct lx200 *lx, int port, int flags)
 
     if ((lx->flags & LX200_DEBUG))
         msg ("listening on port %d", port);
+
+    if ((lx->flags & LX200_DEBUG))
+        util_set_flags (lx->util, UTIL_DEBUG);
 
     return 0;
 }
@@ -463,6 +502,9 @@ struct lx200 *lx200_new (void)
 {
     struct lx200 *lx = xzmalloc (sizeof (*lx));
     int i;
+
+    if (!(lx->util = util_new ()))
+        err_exit ("util_create");
 
     for (i = 0; i < MAX_CLIENTS; i++) {
         lx->clients[i].fd = -1;

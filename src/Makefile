@@ -6,10 +6,10 @@ CFLAGS = -Wall -D_GNU_SOURCE=1 -I$(abs_topdir) \
 	 -DCONFIG_FILENAME=\"$(prefix)/etc/gem.config\"
 
 LIBS  = -L$(abs_topdir)/libini -lini \
-	-lpthread -lev -lm -lrt
+	-lpthread -lev -lm -lrt -lnova
 
 OBJS = configfile.o xzmalloc.o log.o gpio.o hpad.o guide.o motion.o \
-	bbox.o lx200.o
+	bbox.o lx200.o util.o
 
 all: $(PROGS)
 

@@ -35,8 +35,9 @@ void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg);
  */
 void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg);
 
-void lx200_set_position (struct lx200 *lx, int x, int y);
-void lx200_set_resolution (struct lx200 *lx, int x, int y);
+/* Set t,d position in degrees.
+ */
+void lx200_set_position (struct lx200 *lx, double t, double d);
 int lx200_get_slew (struct lx200 *lx);
 
 void lx200_start (struct ev_loop *loop, struct lx200 *lx);
