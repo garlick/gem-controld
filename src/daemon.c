@@ -139,7 +139,7 @@ int main (int argc, char *argv[])
                 bbox_flags |= BBOX_DEBUG;
                 break;
             case 'L':   /* --debug-lx200 */
-                bbox_flags |= LX200_DEBUG;
+                lx200_flags |= LX200_DEBUG;
                 break;
             case 'H':   /* --debug-hpad */
                 hpad_flags |= HPAD_DEBUG;
