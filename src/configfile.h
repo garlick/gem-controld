@@ -12,8 +12,9 @@ struct config_axis {
     int decel;
     int steps;
     double guide;
-    double fast;
+    double slow;
     double medium;
+    double fast;
     double sidereal;
 };
 

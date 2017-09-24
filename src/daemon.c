@@ -318,7 +318,6 @@ void hpad_cb (struct hpad *h, void *arg)
 
 /* FIXME: guide/hpad will interfere with each other, e.g. if a handpad slew
  * is in progress, a GUIDE_NONE event will stop it.
- * FIXME: make guide speed configurable
  */
 void guide_cb (struct guide *g, void *arg)
 {
@@ -408,6 +407,26 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
     int val = lx200_get_slew (lx);
+    double v_t, v_d;
+
+    switch (lx200_get_rate (lx)) {
+        case LX200_RATE_GUIDE:
+            v_t = ctx->opt.t.guide;
+            v_d = ctx->opt.d.guide;
+            break;
+        case LX200_RATE_CENTER:
+            v_t = ctx->opt.t.slow;
+            v_d = ctx->opt.d.slow;
+            break;
+        case LX200_RATE_FIND:
+            v_t = ctx->opt.t.medium;
+            v_d = ctx->opt.d.medium;
+            break;
+        case LX200_RATE_MAX:
+            v_t = ctx->opt.t.fast;
+            v_d = ctx->opt.d.fast;
+            break;
+    }
 
     if (val == LX200_SLEW_NONE) {
         int v = 0;
@@ -419,22 +438,22 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
             err ("d: set velocity");
     } else {
         if ((val & LX200_SLEW_NORTH)) { //DEC+
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.fast);
+            int v = controller_velocity (&ctx->opt.d, v_d);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
         }
         else if ((val & LX200_SLEW_SOUTH)) { // DEC-
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.fast);
+            int v = controller_velocity (&ctx->opt.d, v_d);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
         }
         if ((val & LX200_SLEW_EAST)) { // RA+
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.fast);
+            int v = controller_velocity (&ctx->opt.t, v_t);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & LX200_SLEW_WEST)) { // RA-
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.fast);
+            int v = controller_velocity (&ctx->opt.t, v_t);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
