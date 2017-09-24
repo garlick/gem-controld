@@ -275,28 +275,28 @@ void hpad_cb (struct hpad *h, void *arg)
         }
         case HPAD_KEY_NORTH: { // DEC+
             int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.slow);
+                                fast ? ctx->opt.d.fast : ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: { // DEC-
             int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.slow);
+                                fast ? ctx->opt.d.fast : ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_EAST: { // RA+
             int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.slow);
+                                fast ? ctx->opt.t.fast : ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
         case HPAD_KEY_WEST: { // RA-
             int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.slow);
+                                fast ? ctx->opt.t.fast : ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             break;
@@ -340,22 +340,22 @@ void guide_cb (struct guide *g, void *arg)
             err ("d: set velocity");
     } else {
         if ((val & GUIDE_DEC_PLUS)) {
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.slow);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
         }
         else if ((val & GUIDE_DEC_MINUS)) {
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.slow);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
         }
         if ((val & GUIDE_RA_PLUS)) {
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.slow);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & GUIDE_RA_MINUS)) {
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.slow);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
