@@ -69,6 +69,7 @@ void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
 void lx200_pos_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
+void lx200_goto_cb (struct lx200 *lx, void *arg);
 
 int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
 
@@ -205,6 +206,7 @@ int main (int argc, char *argv[])
         err_exit ("bbox_init");
     lx200_set_position_cb (ctx.lx200, lx200_pos_cb, &ctx);
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
+    lx200_set_goto_cb (ctx.lx200, lx200_goto_cb, &ctx);
     lx200_start (ctx.loop, ctx.lx200);
 
     ev_run (ctx.loop, 0);
@@ -444,6 +446,25 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
     }
 }
 
+/* LX200 protocol notifies us that we should retrieve goto target
+ * coordinates and slew there.
+ */
+void lx200_goto_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    double t_degrees, d_degrees;
+    double t, d;
+
+    lx200_get_target (lx, &t_degrees, &d_degrees);
+
+    t = t_degrees/360.0 * ctx->opt.t.steps;
+    d = d_degrees/360.0 * ctx->opt.d.steps;
+
+    if (motion_set_position (ctx->t, ctx->west ? t : -1*t) < 0)
+        err ("t: set position");
+    if (motion_set_position (ctx->d, d) < 0)
+        err ("t: set position");
+}
 
 /* Calculate velocity in steps/sec for motion controller from arcsec/sec.
  * Take into account controller velocity scaling in 'auto' mode.
