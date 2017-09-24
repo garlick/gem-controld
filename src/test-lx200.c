@@ -40,6 +40,7 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
+void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_pos_cb (struct lx200 *lx, void *arg);
 
@@ -96,6 +97,7 @@ int main (int argc, char *argv[])
         err_exit ("hpad_init");
     lx200_set_position_cb (lx, lx200_pos_cb, NULL);
     lx200_set_slew_cb (lx, lx200_slew_cb, NULL);
+    lx200_set_goto_cb (lx, lx200_goto_cb, NULL);
     lx200_start (loop, lx);
     msg ("lx200 configured");
 
@@ -117,6 +119,13 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
 void lx200_slew_cb (struct lx200 *lx, void *arg)
 {
     (void)lx200_get_slew (lx);
+}
+
+void lx200_goto_cb (struct lx200 *lx, void *arg)
+{
+    double t, d;
+
+    lx200_get_target (lx, &t, &d);
 }
 
 /*

@@ -21,12 +21,9 @@ of keeping complexity down and separation of concerns among modules up.
 The handbox can be used to slew the telescope in two speeds, and the RA axis
 tracks at a fixed sidereal rate.
 
-A Tangent BBOX style network interface allows the telescope to be synchronized
-to the Sky Safari iPad app, as though it were "push-to" scope with encoders.
+The Meade LX200 and Tangent BBOX protocols can be used to sync the telescope
+with a starmap program like Sky Safari, or control it (LX200 only).  A simple
+pointing model is implemented with a one-star alignment available through
+the remote application.
 
 Autoguiding on an ST-4 interface works.
-
-### future plans
-
-Implement a goto interface that works with Sky Safari and other applications,
-such as the LX200 protocol.

@@ -24,40 +24,9 @@
 
 /* Ref: Meade Telescope Serial Command Protocol Revision L, 9 October 2002.
  * https://www.meade.com/support/LX200CommandSet.pdf
- */
-
-/* Sky Safari sends the following commands:
  *
- * If "Set time and location" checked:
- *  St      Set site latitude
- *  Sg      Set site longitude
- *  SG      Set local time zone
- *  SL      Set local time
- *  SC      Set local date
- *
- * Then:
- *  GR      Get telescope RA
- *  RM      Set slew rate to "find" rate (2nd fastest)
- *  GD#     Get telescope DEC
- *
- * Poll for current position:
- *  GR      Get telescope RA
- *  GD#     Get telescope DEC
- *
- * Slew (buttons):
- *  Me Mw Mn Ms   Slew in a particular direction
- *  Qe Qw Qn Qs   Halt slew in a particular direction
- *
- * Sync:
- * Sdr      Set target RA
- * Sds      Set target DEC
- * CM       Sync telescope wtih target
- *
- * Goto:
- * Sdr      Set target RA
- * Sds      Set target DEC
- * MS       Slew to target
- * Q        Halt all slewing
+ * Only the subset of commands needed to get along wtih Sky Safari are
+ * implemented as yet.
  */
 
 #include <stdio.h>
@@ -75,16 +44,13 @@
 
 #include "log.h"
 #include "xzmalloc.h"
-#include "util.h"
+#include "point.h"
 
 #include "lx200.h"
 
 #define LISTEN_BACKLOG 5
 #define MAX_CLIENTS 16
 #define MAX_COMMAND_BYTES 64
-
-#define LX200_ACK   0x6
-#define LX200_NAK   0x15
 
 struct client {
     int fd;
@@ -103,11 +69,13 @@ struct lx200 {
     void *pos_cb_arg;
     lx200_cb_t slew_cb;
     void *slew_cb_arg;
+    lx200_cb_t goto_cb;
+    void *goto_cb_arg;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
-    struct util *util;
+    struct point *point;
     struct ev_loop *loop;
 };
 
@@ -160,7 +128,7 @@ static int process_command (struct client *c, const char *cmd)
     if (!strncmp (cmd, ":St", 3)) {
         int deg, min;
         if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_latitude (c->lx->util, deg, min, 0.);
+            point_set_latitude (c->lx->point, deg, min, 0.);
             rc = write_all (c, "1", 1);
         }
         else
@@ -171,7 +139,7 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sg", 3)) {
         int deg, min;
         if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_longitude (c->lx->util, deg, min, 0.);
+            point_set_longitude (c->lx->point, deg, min, 0.);
             rc = write_all (c, "1", 1);
         }
         else
@@ -204,8 +172,8 @@ static int process_command (struct client *c, const char *cmd)
         double sec;
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_get_position_ra (c->lx->util, &hr, &min, &sec);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_get_position_ra (c->lx->point, &hr, &min, &sec);
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
     /* :GD# - Get telescope DEC
@@ -215,8 +183,8 @@ static int process_command (struct client *c, const char *cmd)
         double sec;
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_get_position_dec (c->lx->util, &deg, &min, &sec);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_get_position_dec (c->lx->point, &deg, &min, &sec);
         rc = wpf (c, "%+.2d*%.2d'%.2d#", deg, min, (int)sec);
     }
     /* :Me#, :Mw#, :Mn#, or :Ms# - slew east, west, north, or south
@@ -247,11 +215,11 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sr", 3)) {
         int hr, min, sec, tenths;
         if (sscanf (cmd + 3, "%d:%d:%d#", &hr, &min, &sec) == 3) {
-            util_set_target_ra (c->lx->util, hr, min, sec);
+            point_set_target_ra (c->lx->point, hr, min, sec);
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d:%d.%d#", &hr, &min, &tenths) == 2) {
-            util_set_target_dec (c->lx->util, hr, min, 6*tenths);
+            point_set_target_dec (c->lx->point, hr, min, 6*tenths);
             rc = write_all (c, "1", 1);
         }
         else
@@ -262,11 +230,11 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":Sd", 3)) {
         int deg, min, sec;
         if (sscanf (cmd + 3, "%d*%d:%d#", &deg, &min, &sec) == 3) {
-            util_set_target_dec (c->lx->util, deg, min, sec);
+            point_set_target_dec (c->lx->point, deg, min, sec);
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d*%d#", &deg, &min) == 2) {
-            util_set_target_dec (c->lx->util, deg, min, 0);
+            point_set_target_dec (c->lx->point, deg, min, 0);
             rc = write_all (c, "1", 1);
         }
         else
@@ -277,15 +245,20 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":CM#")) {
         if (c->lx->pos_cb)
             c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        util_set_position (c->lx->util, c->lx->t, c->lx->d);
-        util_sync_target (c->lx->util);
+        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        point_sync_target (c->lx->point);
         rc = wpf (c, "You Are Here#");
     }
     /* :MS# - slew to target object
      */
     else if (!strcmp (cmd, ":MS#")) {
-        rc = write_all (c, "0", 1); // success "slew is possible"
-        /* N.B. 1<string># obj below horizon; 2<string># below ... something */
+        if (c->lx->pos_cb)
+            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        if (c->lx->goto_cb)
+            c->lx->goto_cb (c->lx, c->lx->goto_cb_arg);
+        rc = write_all (c, "0", 1); // 0 = sucess
+                                    // 1<string># - object below horizon
+                                    // 2<string># - other...
     }
 
     /* Slew commands trigger callback if mask changed
@@ -319,11 +292,11 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
         goto disconnect;
     c->len += n;
 
-    /* ACK - alignment query
+    /* ACK (ascii 0x6) - alignment query
      * This command is not framed like the others.
      * Returns 'A' alt-az, 'L' land, or 'P' polar
      */
-    if (c->len > 0 && c->buf[0] == LX200_ACK) {
+    if (c->len > 0 && c->buf[0] == 0x6) {
         if (c->len > 0 && (c->lx->flags & LX200_DEBUG))
             msg ("%s[%d]: received 0x%x", __FUNCTION__, c->num, c->buf[0]);
         memmove (c->buf, &c->buf[1], --c->len);
@@ -445,6 +418,17 @@ void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
     lx->pos_cb_arg = arg;
 }
 
+void lx200_get_target (struct lx200 *lx, double *t, double *d)
+{
+    point_get_target (lx->point, t, d);
+}
+
+void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
+{
+    lx->goto_cb = cb;
+    lx->goto_cb_arg = arg;
+}
+
 int lx200_init (struct lx200 *lx, int port, int flags)
 {
     struct sockaddr_in addr;
@@ -469,7 +453,7 @@ int lx200_init (struct lx200 *lx, int port, int flags)
         msg ("listening on port %d", port);
 
     if ((lx->flags & LX200_DEBUG))
-        util_set_flags (lx->util, UTIL_DEBUG);
+        point_set_flags (lx->point, POINT_DEBUG);
 
     return 0;
 }
@@ -503,8 +487,8 @@ struct lx200 *lx200_new (void)
     struct lx200 *lx = xzmalloc (sizeof (*lx));
     int i;
 
-    if (!(lx->util = util_new ()))
-        err_exit ("util_create");
+    if (!(lx->point = point_new ()))
+        err_exit ("point_create");
 
     for (i = 0; i < MAX_CLIENTS; i++) {
         lx->clients[i].fd = -1;
