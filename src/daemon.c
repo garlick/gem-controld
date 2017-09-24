@@ -325,12 +325,12 @@ void guide_cb (struct guide *g, void *arg)
     struct prog_context *ctx = arg;
     int val;
 
-    if ((val = guide_read (g)) < 0) {
+    if ((val = guide_get_slew_direction (g)) < 0) {
         err ("guide_read");
         return;
     }
 
-    if (val == GUIDE_NONE) {
+    if (val == 0) {
         int v = 0;
         if (ctx->t_tracking)
             v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
@@ -339,25 +339,25 @@ void guide_cb (struct guide *g, void *arg)
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
     } else {
-        if ((val & GUIDE_DEC_PLUS)) {
+        if ((val & SLEW_DEC_PLUS)) {
             int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, v) < 0)
-                err ("d: set velocity");
+                err ("d: set velocity %d", v);
         }
-        else if ((val & GUIDE_DEC_MINUS)) {
+        else if ((val & SLEW_DEC_MINUS)) {
             int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err ("d: set velocity");
+                err ("d: set velocity %d", v);
         }
-        if ((val & GUIDE_RA_PLUS)) {
+        if ((val & SLEW_RA_PLUS)) {
             int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
-                err ("t: set velocity");
+                err ("t: set velocity %d", v);
         }
-        else if ((val & GUIDE_RA_MINUS)) {
+        else if ((val & SLEW_RA_MINUS)) {
             int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-                err ("t: set velocity");
+                err ("t: set velocity %d",v);
         }
     }
 }

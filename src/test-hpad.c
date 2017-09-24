@@ -130,7 +130,7 @@ void guide_cb (struct guide *g, void *arg)
 {
     int val;
 
-    if ((val = guide_read (g)) < 0) {
+    if ((val = guide_get_slew_direction (g)) < 0) {
         err ("guide");
         return;
     }
