@@ -75,6 +75,7 @@ struct lx200 {
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
+    int slew_rate;
     struct point *point;
     struct ev_loop *loop;
 };
@@ -160,11 +161,17 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":SC", 3)) {
         rc = wpf (c, "1%s#", "Updating Planetary Data");
     }
-    /* :RM# - Set slew rate to Find Rate (2nd fastest)
+    /* :RG#, :RC#, :RM#, :RS# - set slew rate
+     * (no response)
      */
-    else if (!strcmp (cmd, ":RM#")) {
-        // no response
-    }
+    else if (!strcmp (cmd, ":RG#"))
+        c->lx->slew_rate = LX200_RATE_GUIDE; // slowest
+    else if (!strcmp (cmd, ":RC#"))
+        c->lx->slew_rate = LX200_RATE_CENTER;
+    else if (!strcmp (cmd, ":RM#"))
+        c->lx->slew_rate = LX200_RATE_FIND;
+    else if (!strcmp (cmd, ":RS#"))
+        c->lx->slew_rate = LX200_RATE_MAX; // fastest
     /* :GR# - Get telescope RA
      */
     else if (!strcmp (cmd, ":GR#")) {
@@ -391,6 +398,13 @@ static void slew_dump (int val)
          (val & LX200_SLEW_SOUTH) ? "*" : " ",
          (val & LX200_SLEW_EAST) ? "*" : " ",
          (val & LX200_SLEW_WEST) ? "*" : " ");
+}
+
+int lx200_get_rate (struct lx200 *lx)
+{
+    if ((lx->flags & LX200_DEBUG))
+        msg ("lx200 slew rate: %d", lx->slew_rate);
+    return lx->slew_rate;
 }
 
 int lx200_get_slew (struct lx200 *lx)

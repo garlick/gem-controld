@@ -17,6 +17,13 @@ enum {
     LX200_SLEW_WEST = 8,
 };
 
+enum {
+    LX200_RATE_GUIDE = 0,
+    LX200_RATE_CENTER = 1,
+    LX200_RATE_FIND = 2,
+    LX200_RATE_MAX = 3,
+};
+
 struct lx200;
 typedef void (*lx200_cb_t)(struct lx200 *lx, void *arg);
 
@@ -46,6 +53,7 @@ void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg);
  */
 void lx200_set_position (struct lx200 *lx, double t, double d);
 int lx200_get_slew (struct lx200 *lx);
+int lx200_get_rate  (struct lx200 *lx);
 void lx200_get_target (struct lx200 *lx, double *t, double *d);
 
 void lx200_start (struct ev_loop *loop, struct lx200 *lx);
