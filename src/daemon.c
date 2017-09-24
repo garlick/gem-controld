@@ -303,7 +303,12 @@ void hpad_cb (struct hpad *h, void *arg)
         }
         case (HPAD_KEY_M1 | HPAD_KEY_M2): /* not assigned*/
             break;
-        case HPAD_KEY_M1: /* unused */
+        case HPAD_KEY_M1: /* emergency stop */
+            if (motion_stop (ctx->t) < 0)
+                err ("t: stop");
+            if (motion_stop (ctx->d) < 0)
+                err ("d: stop");
+            ctx->t_tracking = false;
             break;
         case HPAD_KEY_M2: /* toggle tracking (key release updates motion) */
             ctx->t_tracking = !ctx->t_tracking;
