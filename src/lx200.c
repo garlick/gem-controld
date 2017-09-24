@@ -24,40 +24,9 @@
 
 /* Ref: Meade Telescope Serial Command Protocol Revision L, 9 October 2002.
  * https://www.meade.com/support/LX200CommandSet.pdf
- */
-
-/* Sky Safari sends the following commands:
  *
- * If "Set time and location" checked:
- *  St      Set site latitude
- *  Sg      Set site longitude
- *  SG      Set local time zone
- *  SL      Set local time
- *  SC      Set local date
- *
- * Then:
- *  GR      Get telescope RA
- *  RM      Set slew rate to "find" rate (2nd fastest)
- *  GD#     Get telescope DEC
- *
- * Poll for current position:
- *  GR      Get telescope RA
- *  GD#     Get telescope DEC
- *
- * Slew (buttons):
- *  Me Mw Mn Ms   Slew in a particular direction
- *  Qe Qw Qn Qs   Halt slew in a particular direction
- *
- * Sync:
- * Sdr      Set target RA
- * Sds      Set target DEC
- * CM       Sync telescope wtih target
- *
- * Goto:
- * Sdr      Set target RA
- * Sds      Set target DEC
- * MS       Slew to target
- * Q        Halt all slewing
+ * Only the subset of commands needed to get along wtih Sky Safari are
+ * implemented as yet.
  */
 
 #include <stdio.h>
