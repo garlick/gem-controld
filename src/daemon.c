@@ -122,15 +122,6 @@ int main (int argc, char *argv[])
             case 'c':   /* --config FILE */
                 config_filename = xstrdup (optarg);
                 break;
-        }
-    }
-    configfile_init (config_filename, &ctx.opt);
-
-    optind = 0;
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'c':   /* --config FILE (handled above) */
-                break;
             case 'M':   /* --debug-motion */
                 motion_flags |= MOTION_DEBUG;
                 break;
@@ -159,6 +150,7 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
+    configfile_init (config_filename, &ctx.opt);
     if (!ctx.opt.hpad_gpio)
         msg_exit ("no hpad_gpio was configured");
     if (!ctx.opt.guide_gpio)

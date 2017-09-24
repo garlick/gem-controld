@@ -73,15 +73,6 @@ int main (int argc, char *argv[])
             case 'c':   /* --config FILE */
                 config_filename = xstrdup (optarg);
                 break;
-        }
-    }
-    configfile_init (config_filename, &cfg);
-
-    optind = 0;
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'c':   /* --config FILE (handled above) */
-                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -89,6 +80,7 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
+    configfile_init (config_filename, &cfg);
     if (!cfg.hpad_gpio)
         msg_exit ("hpad_gpio was not configured");
     if (!cfg.guide_gpio)
