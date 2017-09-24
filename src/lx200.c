@@ -52,9 +52,6 @@
 #define MAX_CLIENTS 16
 #define MAX_COMMAND_BYTES 64
 
-#define LX200_ACK   0x6
-#define LX200_NAK   0x15
-
 struct client {
     int fd;
     ev_io w;
@@ -288,11 +285,11 @@ static void client_cb (struct ev_loop *loop, ev_io *w, int revents)
         goto disconnect;
     c->len += n;
 
-    /* ACK - alignment query
+    /* ACK (ascii 0x6) - alignment query
      * This command is not framed like the others.
      * Returns 'A' alt-az, 'L' land, or 'P' polar
      */
-    if (c->len > 0 && c->buf[0] == LX200_ACK) {
+    if (c->len > 0 && c->buf[0] == 0x6) {
         if (c->len > 0 && (c->lx->flags & LX200_DEBUG))
             msg ("%s[%d]: received 0x%x", __FUNCTION__, c->num, c->buf[0]);
         memmove (c->buf, &c->buf[1], --c->len);
