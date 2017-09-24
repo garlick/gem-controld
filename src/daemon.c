@@ -45,8 +45,6 @@
 #include "bbox.h"
 #include "lx200.h"
 
-const double sidereal_velocity = 4.17075E-3; /* degrees/sec */
-
 char *prog = "";
 
 struct prog_context {
@@ -276,7 +274,7 @@ void hpad_cb (struct hpad *h, void *arg)
         case HPAD_KEY_NONE: {
             int v = 0;
             if (ctx->t_tracking)
-                v = controller_velocity (&ctx->opt.t, sidereal_velocity);
+                v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
@@ -338,7 +336,7 @@ void guide_cb (struct guide *g, void *arg)
     if (val == GUIDE_NONE) {
         int v = 0;
         if (ctx->t_tracking)
-            v = controller_velocity (&ctx->opt.t, sidereal_velocity);
+            v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
         if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
@@ -417,7 +415,7 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
     if (val == LX200_SLEW_NONE) {
         int v = 0;
         if (ctx->t_tracking)
-            v = controller_velocity (&ctx->opt.t, sidereal_velocity);
+            v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
         if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
