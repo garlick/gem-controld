@@ -40,6 +40,7 @@
 #include "gpio.h"
 #include "configfile.h"
 #include "motion.h"
+#include "slew.h"
 #include "hpad.h"
 #include "guide.h"
 #include "bbox.h"
@@ -406,29 +407,29 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
 void lx200_slew_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
-    int val = lx200_get_slew (lx);
+    int val = lx200_get_slew_direction (lx);
     double v_t, v_d;
 
-    switch (lx200_get_rate (lx)) {
-        case LX200_RATE_GUIDE:
+    switch (lx200_get_slew_rate (lx)) {
+        case SLEW_RATE_GUIDE:
             v_t = ctx->opt.t.guide;
             v_d = ctx->opt.d.guide;
             break;
-        case LX200_RATE_CENTER:
+        case SLEW_RATE_SLOW:
             v_t = ctx->opt.t.slow;
             v_d = ctx->opt.d.slow;
             break;
-        case LX200_RATE_FIND:
+        case SLEW_RATE_MEDIUM:
             v_t = ctx->opt.t.medium;
             v_d = ctx->opt.d.medium;
             break;
-        case LX200_RATE_MAX:
+        case SLEW_RATE_FAST:
             v_t = ctx->opt.t.fast;
             v_d = ctx->opt.d.fast;
             break;
     }
 
-    if (val == LX200_SLEW_NONE) {
+    if (val == 0) {
         int v = 0;
         if (ctx->t_tracking)
             v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
@@ -437,22 +438,22 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
     } else {
-        if ((val & LX200_SLEW_NORTH)) { //DEC+
+        if ((val & SLEW_DEC_PLUS)) {
             int v = controller_velocity (&ctx->opt.d, v_d);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
         }
-        else if ((val & LX200_SLEW_SOUTH)) { // DEC-
+        else if ((val & SLEW_DEC_MINUS)) {
             int v = controller_velocity (&ctx->opt.d, v_d);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
         }
-        if ((val & LX200_SLEW_EAST)) { // RA+
+        if ((val & SLEW_RA_PLUS)) {
             int v = controller_velocity (&ctx->opt.t, v_t);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
-        else if ((val & LX200_SLEW_WEST)) { // RA-
+        else if ((val & SLEW_RA_MINUS)) { // RA-
             int v = controller_velocity (&ctx->opt.t, v_t);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");

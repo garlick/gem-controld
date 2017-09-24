@@ -110,7 +110,8 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
 
 void lx200_slew_cb (struct lx200 *lx, void *arg)
 {
-    (void)lx200_get_slew (lx);
+    (void)lx200_get_slew_direction (lx);
+    (void)lx200_get_slew_rate (lx);
 }
 
 void lx200_goto_cb (struct lx200 *lx, void *arg)
