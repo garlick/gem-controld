@@ -45,7 +45,7 @@
 #include "bbox.h"
 #include "lx200.h"
 
-const double sidereal_velocity = 15.0417; /* arcsec/sec */
+const double sidereal_velocity = 4.17075E-3; /* degrees/sec */
 
 char *prog = "";
 
@@ -71,7 +71,7 @@ void lx200_pos_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 
-int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec);
+int controller_velocity (struct config_axis *axis, double degrees_persec);
 
 #define OPTIONS "+c:hMBLHGwf"
 static const struct option longopts[] = {
@@ -276,7 +276,7 @@ void hpad_cb (struct hpad *h, void *arg)
         case HPAD_KEY_NONE: {
             int v = 0;
             if (ctx->t_tracking)
-                v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+                v = controller_velocity (&ctx->opt.t, sidereal_velocity);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             if (motion_set_velocity (ctx->d, 0) < 0)
@@ -284,28 +284,28 @@ void hpad_cb (struct hpad *h, void *arg)
             break;
         }
         case HPAD_KEY_NORTH: { // DEC+
-            int v = controller_vfromarcsec (&ctx->opt.d,
+            int v = controller_velocity (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: { // DEC-
-            int v = controller_vfromarcsec (&ctx->opt.d,
+            int v = controller_velocity (&ctx->opt.d,
                                 fast ? ctx->opt.d.fast : ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_EAST: { // RA+
-            int v = controller_vfromarcsec (&ctx->opt.t,
+            int v = controller_velocity (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
         case HPAD_KEY_WEST: { // RA-
-            int v = controller_vfromarcsec (&ctx->opt.t,
+            int v = controller_velocity (&ctx->opt.t,
                                 fast ? ctx->opt.t.fast : ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
@@ -338,29 +338,29 @@ void guide_cb (struct guide *g, void *arg)
     if (val == GUIDE_NONE) {
         int v = 0;
         if (ctx->t_tracking)
-            v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            v = controller_velocity (&ctx->opt.t, sidereal_velocity);
         if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
     } else {
         if ((val & GUIDE_DEC_PLUS)) {
-            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.slow);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
         }
         else if ((val & GUIDE_DEC_MINUS)) {
-            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.slow);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.slow);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
         }
         if ((val & GUIDE_RA_PLUS)) {
-            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & GUIDE_RA_MINUS)) {
-            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.slow);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.slow);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
@@ -417,29 +417,29 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
     if (val == LX200_SLEW_NONE) {
         int v = 0;
         if (ctx->t_tracking)
-            v = controller_vfromarcsec (&ctx->opt.t, sidereal_velocity);
+            v = controller_velocity (&ctx->opt.t, sidereal_velocity);
         if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
             err ("t: set velocity");
         if (motion_set_velocity (ctx->d, 0) < 0)
             err ("d: set velocity");
     } else {
         if ((val & LX200_SLEW_NORTH)) { //DEC+
-            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.fast);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.fast);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
         }
         else if ((val & LX200_SLEW_SOUTH)) { // DEC-
-            int v = controller_vfromarcsec (&ctx->opt.d, ctx->opt.d.fast);
+            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.fast);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
         }
         if ((val & LX200_SLEW_EAST)) { // RA+
-            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.fast);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.fast);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
         }
         else if ((val & LX200_SLEW_WEST)) { // RA-
-            int v = controller_vfromarcsec (&ctx->opt.t, ctx->opt.t.fast);
+            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.fast);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
         }
@@ -466,12 +466,12 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
         err ("t: set position");
 }
 
-/* Calculate velocity in steps/sec for motion controller from arcsec/sec.
+/* Calculate velocity in steps/sec for motion controller from degrees/sec.
  * Take into account controller velocity scaling in 'auto' mode.
  */
-int controller_vfromarcsec (struct config_axis *axis, double arcsec_persec)
+int controller_velocity (struct config_axis *axis, double degrees_persec)
 {
-    double steps_persec = arcsec_persec * axis->steps / (360.0*60*60);
+    double steps_persec = degrees_persec * axis->steps / 360.;
 
     if (axis->mode == 1)
         steps_persec *= 1<<(axis->resolution);
