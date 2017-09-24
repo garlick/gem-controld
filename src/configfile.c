@@ -67,6 +67,8 @@ static int config_axis (struct config_axis *a, const char *name, const char *val
         a->guide = strtod (value, NULL);
     else if (!strcmp (name, "fast"))
         a->fast = strtod (value, NULL);
+    else if (!strcmp (name, "medium"))
+        a->medium = strtod (value, NULL);
     else if (!strcmp (name, "sidereal"))
         a->sidereal = strtod (value, NULL);
     else if (!strcmp (name, "ihold"))

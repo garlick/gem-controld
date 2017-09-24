@@ -13,6 +13,7 @@ struct config_axis {
     int steps;
     double guide;
     double fast;
+    double medium;
     double sidereal;
 };
 

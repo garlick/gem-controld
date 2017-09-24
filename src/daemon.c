@@ -275,28 +275,28 @@ void hpad_cb (struct hpad *h, void *arg)
         }
         case HPAD_KEY_NORTH: { // DEC+
             int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.guide);
+                                fast ? ctx->opt.d.fast : ctx->opt.d.medium);
             if (motion_set_velocity (ctx->d, v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_SOUTH: { // DEC-
             int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.guide);
+                                fast ? ctx->opt.d.fast : ctx->opt.d.medium);
             if (motion_set_velocity (ctx->d, -1*v) < 0)
                 err ("d: set velocity");
             break;
         }
         case HPAD_KEY_EAST: { // RA+
             int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.guide);
+                                fast ? ctx->opt.t.fast : ctx->opt.t.medium);
             if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
                 err ("t: set velocity");
             break;
         }
         case HPAD_KEY_WEST: { // RA-
             int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.guide);
+                                fast ? ctx->opt.t.fast : ctx->opt.t.medium);
             if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
                 err ("t: set velocity");
             break;
