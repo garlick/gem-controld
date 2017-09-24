@@ -44,6 +44,11 @@ void point_set_longitude (struct point *p, int deg, int min, double sec);
 void point_set_target_dec (struct point *p, int deg, int min, double sec);
 void point_set_target_ra (struct point *p, int hr, int min, double sec);
 
+/* Get target object coordinates in uncorrected telescope position (degrees).
+ * This will be used for goto.
+ */
+void point_get_target (struct point *p, double *t, double *d);
+
 /* Set internal zero point corrections so that uncorrected telescope position
  * plus zpc equals (ha,dec) of target object.
  */

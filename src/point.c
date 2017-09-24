@@ -97,6 +97,15 @@ void point_set_target_ra (struct point *p, int hr, int min, double sec)
         msg ("%s: %.6lf", __FUNCTION__, ln_hms_to_deg (&p->target.ra));
 }
 
+void point_get_target (struct point *p, double *t, double *d)
+{
+    double ha = get_lst (p) - ln_hms_to_deg (&p->target.ra);
+    double dec = ln_dms_to_deg (&p->target.dec);
+
+    *t = ha - p->zpc.ra;
+    *d = dec - p->zpc.dec;
+}
+
 void point_set_position (struct point *p, double t, double d)
 {
     p->posn_raw.ra = t;
