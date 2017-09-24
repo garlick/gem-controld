@@ -69,6 +69,8 @@ struct lx200 {
     void *pos_cb_arg;
     lx200_cb_t slew_cb;
     void *slew_cb_arg;
+    lx200_cb_t goto_cb;
+    void *goto_cb_arg;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
@@ -250,8 +252,13 @@ static int process_command (struct client *c, const char *cmd)
     /* :MS# - slew to target object
      */
     else if (!strcmp (cmd, ":MS#")) {
-        rc = write_all (c, "0", 1); // success "slew is possible"
-        /* N.B. 1<string># obj below horizon; 2<string># below ... something */
+        if (c->lx->pos_cb)
+            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        if (c->lx->goto_cb)
+            c->lx->goto_cb (c->lx, c->lx->goto_cb_arg);
+        rc = write_all (c, "0", 1); // 0 = sucess
+                                    // 1<string># - object below horizon
+                                    // 2<string># - other...
     }
 
     /* Slew commands trigger callback if mask changed
@@ -409,6 +416,17 @@ void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
 {
     lx->pos_cb = cb;
     lx->pos_cb_arg = arg;
+}
+
+void lx200_get_target (struct lx200 *lx, double *t, double *d)
+{
+    point_get_target (lx->point, t, d);
+}
+
+void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
+{
+    lx->goto_cb = cb;
+    lx->goto_cb_arg = arg;
 }
 
 int lx200_init (struct lx200 *lx, int port, int flags)
