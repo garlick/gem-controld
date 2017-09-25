@@ -118,12 +118,9 @@ int main (int argc, char *argv[])
 
 void hpad_cb (struct hpad *h, void *arg)
 {
-    int val;
-
-    if ((val = hpad_read (h)) < 0) {
-        err ("hpad");
-        return;
-    }
+    hpad_get_slew_direction (h);
+    hpad_get_slew_rate (h);
+    hpad_get_control (h);
 }
 
 void guide_cb (struct guide *g, void *arg)

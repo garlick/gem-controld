@@ -58,6 +58,7 @@ struct prog_context {
     struct motion *d;
     struct ev_loop *loop;
     bool t_tracking;
+    int slew;
     bool west;
 };
 
@@ -252,114 +253,171 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
     return m;
 }
 
+/* Calculate velocity in steps/sec for motion controller from degrees/sec.
+ * Take into account controller velocity scaling in 'auto' mode.
+ */
+int controller_velocity (struct config_axis *axis, double degrees_persec)
+{
+    double steps_persec = degrees_persec * axis->steps / 360.;
+
+    if (axis->mode == 1)
+        steps_persec *= 1<<(axis->resolution);
+    return lrint (steps_persec);
+}
+
+/* Given 'rate' enum from slew.h, look up configured rate in degrees/sec.
+ * If 'neg' is true, make the velocity negative.
+ * If 'track' is true, add the sidereal rate.
+ * If 'west' is true, negate the whole thing to account for meridian flip.
+ * Finally, convert degrees/sec to controller velocity in steps/sec.
+ */
+int lookup_rate (struct config_axis *axis, int rate,
+                 bool neg, bool track, bool west)
+{
+    double v;
+
+    switch (rate) {
+        case SLEW_RATE_GUIDE:
+            v = axis->guide;
+            break;
+        case SLEW_RATE_SLOW:
+            v = axis->slow;
+            break;
+        case SLEW_RATE_MEDIUM:
+            v = axis->medium;
+            break;
+        case SLEW_RATE_FAST:
+            v = axis->fast;
+            break;
+        default:
+            v = 0.;
+            break;
+    }
+    if (neg)
+        v *= -1.;
+    if (track)
+        v -= axis->sidereal;
+    if (west)
+        v *= -1.;
+    return controller_velocity (axis, v);
+}
+
+/* A new slew "key press" event ignores a slew in progress on the
+ * same axis and blindly sets the velocity.  The motion controllers can
+ * handle this, even if direction is reversed.  The "key release" cancels
+ * this and any other slew in progress.  The axes are independent.
+ * It is possible to configure slew rates that will result in a controller
+ * error;  motion_set_velocity() will return -1 with errno == EINVAL in
+ * that case and the slew will fail.
+ */
+void slew_update (struct prog_context *ctx, int newmask, int rate)
+{
+    if ((newmask & SLEW_RA_PLUS) && (newmask & SLEW_RA_MINUS))
+        newmask &= ~(SLEW_RA_PLUS + SLEW_RA_MINUS);
+    if ((newmask & SLEW_DEC_PLUS) && (newmask & SLEW_DEC_MINUS))
+        newmask &= ~(SLEW_DEC_PLUS + SLEW_DEC_MINUS);
+
+    if ((newmask & SLEW_RA_PLUS) || (newmask & SLEW_RA_MINUS)) {
+        int cv = lookup_rate (&ctx->opt.t, rate, (newmask & SLEW_RA_MINUS),
+                              ctx->t_tracking, ctx->west);
+        if (motion_set_velocity (ctx->t, cv) < 0)
+            err ("t: set velocity %d", cv);
+    }
+    else {
+        if ((ctx->slew & SLEW_RA_PLUS) || (ctx->slew & SLEW_RA_MINUS)) {
+            if (ctx->t_tracking) {
+                int cv = lookup_rate (&ctx->opt.t, 0, false,
+                                     ctx->t_tracking, ctx->west);
+                if (motion_set_velocity (ctx->t, cv) < 0)
+                    err ("t: set velocity %d", cv);
+            }
+            else {
+                if (motion_stop (ctx->t) < 0)
+                    err ("t: stop");
+            }
+        }
+    }
+    if ((newmask & SLEW_DEC_PLUS) || (newmask & SLEW_DEC_MINUS)) {
+        int cv = lookup_rate (&ctx->opt.d, rate, (newmask & SLEW_DEC_MINUS),
+                              false, false);
+        if (motion_set_velocity (ctx->d, cv) < 0)
+            err ("d: set velocity %d", cv);
+    }
+    else {
+        if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
+            if (motion_stop (ctx->d) < 0)
+                err ("d: stop");
+        }
+    }
+    ctx->slew = newmask;
+}
+
 void hpad_cb (struct hpad *h, void *arg)
 {
     struct prog_context *ctx = arg;
-    int val;
+    int dir = hpad_get_slew_direction (h);
+    int rate = hpad_get_slew_rate (h);
+    int ctrl = hpad_get_control (h);
 
-    if ((val = hpad_read (h)) < 0) {
-        err ("hpad_read");
+    /* M1 - emergency stop
+     */
+    if ((ctrl & HPAD_CONTROL_M1)) {
+        if (motion_stop (ctx->t) < 0)
+            err ("t: stop");
+        if (motion_stop (ctx->d) < 0)
+            err ("d: stop");
+        ctx->t_tracking = false;
+        ctx->slew = 0;
         return;
     }
-
-    bool fast = (val & HPAD_MASK_FAST);
-    switch (val & HPAD_MASK_KEYS) {
-        case HPAD_KEY_NONE: {
-            int v = 0;
-            if (ctx->t_tracking)
-                v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-                err ("t: set velocity");
-            if (motion_set_velocity (ctx->d, 0) < 0)
-                err ("d: set velocity");
-            break;
-        }
-        case HPAD_KEY_NORTH: { // DEC+
-            int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.medium);
-            if (motion_set_velocity (ctx->d, v) < 0)
-                err ("d: set velocity");
-            break;
-        }
-        case HPAD_KEY_SOUTH: { // DEC-
-            int v = controller_velocity (&ctx->opt.d,
-                                fast ? ctx->opt.d.fast : ctx->opt.d.medium);
-            if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err ("d: set velocity");
-            break;
-        }
-        case HPAD_KEY_EAST: { // RA+
-            int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.medium);
-            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
-                err ("t: set velocity");
-            break;
-        }
-        case HPAD_KEY_WEST: { // RA-
-            int v = controller_velocity (&ctx->opt.t,
-                                fast ? ctx->opt.t.fast : ctx->opt.t.medium);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-                err ("t: set velocity");
-            break;
-        }
-        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* not assigned*/
-            break;
-        case HPAD_KEY_M1: /* emergency stop */
-            if (motion_stop (ctx->t) < 0)
-                err ("t: stop");
-            if (motion_stop (ctx->d) < 0)
-                err ("d: stop");
+    /* M2 - toggle tracking
+     */
+    if ((ctrl & HPAD_CONTROL_M2)) {
+        if (ctx->t_tracking) {
+            if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
+                if (motion_stop (ctx->t) < 0)
+                    err ("t: stop");
+            }
             ctx->t_tracking = false;
-            break;
-        case HPAD_KEY_M2: /* toggle tracking (key release updates motion) */
-            ctx->t_tracking = !ctx->t_tracking;
-            break;
+        }
+        else {
+            if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
+                int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
+                                      true, ctx->west);
+                if (motion_set_velocity (ctx->t, cv) < 0)
+                    err ("t: set velocity %d", cv);
+            }
+            ctx->t_tracking = true;
+        }
+        return;
     }
+    /* N,S,E,W
+     */
+    slew_update (ctx, dir, rate);
 }
 
-/* FIXME: guide/hpad will interfere with each other, e.g. if a handpad slew
- * is in progress, a GUIDE_NONE event will stop it.
- */
 void guide_cb (struct guide *g, void *arg)
 {
     struct prog_context *ctx = arg;
-    int val;
+    int dir;
 
-    if ((val = guide_get_slew_direction (g)) < 0) {
-        err ("guide_read");
+    if ((dir = guide_get_slew_direction (g)) < 0) {
+        err ("guide_get_slew_direction");
         return;
     }
+    slew_update (ctx, dir, SLEW_RATE_GUIDE);
+}
 
-    if (val == 0) {
-        int v = 0;
-        if (ctx->t_tracking)
-            v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
-        if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-            err ("t: set velocity");
-        if (motion_set_velocity (ctx->d, 0) < 0)
-            err ("d: set velocity");
-    } else {
-        if ((val & SLEW_DEC_PLUS)) {
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
-            if (motion_set_velocity (ctx->d, v) < 0)
-                err ("d: set velocity %d", v);
-        }
-        else if ((val & SLEW_DEC_MINUS)) {
-            int v = controller_velocity (&ctx->opt.d, ctx->opt.d.guide);
-            if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err ("d: set velocity %d", v);
-        }
-        if ((val & SLEW_RA_PLUS)) {
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
-            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
-                err ("t: set velocity %d", v);
-        }
-        else if ((val & SLEW_RA_MINUS)) {
-            int v = controller_velocity (&ctx->opt.t, ctx->opt.t.guide);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-                err ("t: set velocity %d",v);
-        }
-    }
+/* LX200 protocol notifies us that slew "button" events
+ * have occurred.
+ */
+void lx200_slew_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    int dir = lx200_get_slew_direction (lx);
+    int rate = lx200_get_slew_rate (lx);
+
+    slew_update (ctx, dir, rate);
 }
 
 /* Bbox protocol requests that we update "encoder" position.
@@ -401,66 +459,6 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
     lx200_set_position (lx, ctx->west ? t_degrees : -1*t_degrees, d_degrees);
 }
 
-/* LX200 protocol notifies us that slew "button" events
- * have occurred.
- */
-void lx200_slew_cb (struct lx200 *lx, void *arg)
-{
-    struct prog_context *ctx = arg;
-    int val = lx200_get_slew_direction (lx);
-    double v_t, v_d;
-
-    switch (lx200_get_slew_rate (lx)) {
-        case SLEW_RATE_GUIDE:
-            v_t = ctx->opt.t.guide;
-            v_d = ctx->opt.d.guide;
-            break;
-        case SLEW_RATE_SLOW:
-            v_t = ctx->opt.t.slow;
-            v_d = ctx->opt.d.slow;
-            break;
-        case SLEW_RATE_MEDIUM:
-            v_t = ctx->opt.t.medium;
-            v_d = ctx->opt.d.medium;
-            break;
-        case SLEW_RATE_FAST:
-            v_t = ctx->opt.t.fast;
-            v_d = ctx->opt.d.fast;
-            break;
-    }
-
-    if (val == 0) {
-        int v = 0;
-        if (ctx->t_tracking)
-            v = controller_velocity (&ctx->opt.t, ctx->opt.t.sidereal);
-        if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-            err ("t: set velocity");
-        if (motion_set_velocity (ctx->d, 0) < 0)
-            err ("d: set velocity");
-    } else {
-        if ((val & SLEW_DEC_PLUS)) {
-            int v = controller_velocity (&ctx->opt.d, v_d);
-            if (motion_set_velocity (ctx->d, v) < 0)
-                err ("d: set velocity");
-        }
-        else if ((val & SLEW_DEC_MINUS)) {
-            int v = controller_velocity (&ctx->opt.d, v_d);
-            if (motion_set_velocity (ctx->d, -1*v) < 0)
-                err ("d: set velocity");
-        }
-        if ((val & SLEW_RA_PLUS)) {
-            int v = controller_velocity (&ctx->opt.t, v_t);
-            if (motion_set_velocity (ctx->t, ctx->west ? -1*v : v) < 0)
-                err ("t: set velocity");
-        }
-        else if ((val & SLEW_RA_MINUS)) { // RA-
-            int v = controller_velocity (&ctx->opt.t, v_t);
-            if (motion_set_velocity (ctx->t, ctx->west ? v : -1*v) < 0)
-                err ("t: set velocity");
-        }
-    }
-}
-
 /* LX200 protocol notifies us that we should retrieve goto target
  * coordinates and slew there.
  */
@@ -479,18 +477,6 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
         err ("t: set position");
     if (motion_set_position (ctx->d, d) < 0)
         err ("t: set position");
-}
-
-/* Calculate velocity in steps/sec for motion controller from degrees/sec.
- * Take into account controller velocity scaling in 'auto' mode.
- */
-int controller_velocity (struct config_axis *axis, double degrees_persec)
-{
-    double steps_persec = degrees_persec * axis->steps / 360.;
-
-    if (axis->mode == 1)
-        steps_persec *= 1<<(axis->resolution);
-    return lrint (steps_persec);
 }
 
 /*
