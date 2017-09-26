@@ -45,6 +45,7 @@
 #include "log.h"
 #include "xzmalloc.h"
 #include "point.h"
+#include "slew.h"
 
 #include "lx200.h"
 
@@ -75,6 +76,7 @@ struct lx200 {
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
+    int slew_rate;
     struct point *point;
     struct ev_loop *loop;
 };
@@ -160,11 +162,17 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strncmp (cmd, ":SC", 3)) {
         rc = wpf (c, "1%s#", "Updating Planetary Data");
     }
-    /* :RM# - Set slew rate to Find Rate (2nd fastest)
+    /* :RG#, :RC#, :RM#, :RS# - set slew rate
+     * (no response)
      */
-    else if (!strcmp (cmd, ":RM#")) {
-        // no response
-    }
+    else if (!strcmp (cmd, ":RG#"))
+        c->lx->slew_rate = SLEW_RATE_GUIDE;
+    else if (!strcmp (cmd, ":RC#"))
+        c->lx->slew_rate = SLEW_RATE_SLOW;
+    else if (!strcmp (cmd, ":RM#"))
+        c->lx->slew_rate = SLEW_RATE_MEDIUM;
+    else if (!strcmp (cmd, ":RS#"))
+        c->lx->slew_rate = SLEW_RATE_FAST;
     /* :GR# - Get telescope RA
      */
     else if (!strcmp (cmd, ":GR#")) {
@@ -193,21 +201,21 @@ static int process_command (struct client *c, const char *cmd)
      * (no response)
      */
     else if (!strcmp (cmd, ":Me#"))
-        new_slew_mask |= LX200_SLEW_EAST;
+        new_slew_mask |= SLEW_RA_PLUS;
     else if (!strcmp (cmd, ":Mw#"))
-        new_slew_mask |= LX200_SLEW_WEST;
+        new_slew_mask |= SLEW_RA_MINUS;
     else if (!strcmp (cmd, ":Mn#"))
-        new_slew_mask |= LX200_SLEW_NORTH;
+        new_slew_mask |= SLEW_DEC_PLUS;
     else if (!strcmp (cmd, ":Ms#"))
-        new_slew_mask |= LX200_SLEW_SOUTH;
+        new_slew_mask |= SLEW_DEC_MINUS;
     else if (!strcmp (cmd, ":Qe#"))
-        new_slew_mask &= ~LX200_SLEW_EAST;
+        new_slew_mask &= ~SLEW_RA_PLUS;
     else if (!strcmp (cmd, ":Qw#"))
-        new_slew_mask &= ~LX200_SLEW_WEST;
+        new_slew_mask &= ~SLEW_RA_MINUS;
     else if (!strcmp (cmd, ":Qn#"))
-        new_slew_mask &= ~LX200_SLEW_NORTH;
+        new_slew_mask &= ~SLEW_DEC_PLUS;
     else if (!strcmp (cmd, ":Qs#"))
-        new_slew_mask &= ~LX200_SLEW_SOUTH;
+        new_slew_mask &= ~SLEW_DEC_MINUS;
     else if (!strcmp (cmd, ":Q#"))
         new_slew_mask = 0;
     /* :SrHH:MM.T# or :SrHH:MM:SS# - set target object RA
@@ -387,17 +395,24 @@ static void listen_cb (struct ev_loop *loop, ev_io *w, int revents)
 static void slew_dump (int val)
 {
     msg ("lx200 slew: (0x%x) %sN %sS %sE %sW", val,
-         (val & LX200_SLEW_NORTH) ? "*" : " ",
-         (val & LX200_SLEW_SOUTH) ? "*" : " ",
-         (val & LX200_SLEW_EAST) ? "*" : " ",
-         (val & LX200_SLEW_WEST) ? "*" : " ");
+         (val & SLEW_DEC_PLUS) ? "*" : " ",
+         (val & SLEW_DEC_MINUS) ? "*" : " ",
+         (val & SLEW_RA_PLUS) ? "*" : " ",
+         (val & SLEW_RA_MINUS) ? "*" : " ");
 }
 
-int lx200_get_slew (struct lx200 *lx)
+int lx200_get_slew_direction (struct lx200 *lx)
 {
     if ((lx->flags & LX200_DEBUG))
         slew_dump (lx->slew_mask);
     return lx->slew_mask;
+}
+
+int lx200_get_slew_rate (struct lx200 *lx)
+{
+    if ((lx->flags & LX200_DEBUG))
+        msg ("lx200 slew rate: %d", lx->slew_rate);
+    return lx->slew_rate;
 }
 
 void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)

@@ -38,8 +38,22 @@
 #include "log.h"
 #include "xzmalloc.h"
 #include "gpio.h"
+#include "slew.h"
 
 #include "hpad.h"
+
+/* Bartels stepper controller handpad returns these values
+ * when keys are pressed.
+ */
+enum {
+    HPAD_KEY_NORTH = 1,
+    HPAD_KEY_SOUTH = 2,
+    HPAD_KEY_WEST = 3,
+    HPAD_KEY_EAST = 4,
+    HPAD_KEY_M1 = 5,
+    HPAD_KEY_M2 = 6,
+    HPAD_KEY_FAST = 8
+};
 
 struct pin {
     int pin;
@@ -86,43 +100,7 @@ void hpad_destroy (struct hpad *h)
     }
 }
 
-static void hpad_dump (int val)
-{
-    bool fast = (val & HPAD_MASK_FAST);
-    switch (val & HPAD_MASK_KEYS) {
-        case HPAD_KEY_NONE: {
-            msg ("hpad: KEY_NONE (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_NORTH: {
-            msg ("hpad: KEY_NORTH (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_SOUTH: {
-            msg ("hpad: KEY_SOUTH (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_WEST: {
-            msg ("hpad: KEY_WEST (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case HPAD_KEY_EAST: {
-            msg ("hpad: KEY_EAST (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        }
-        case (HPAD_KEY_M1 | HPAD_KEY_M2): /* zero */
-            msg ("hpad: KEY_M1 and KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        case HPAD_KEY_M1: /* unused */
-            msg ("hpad: KEY_M1 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-        case HPAD_KEY_M2: /* toggle stop */
-            msg ("hpad: KEY_M2 (0x%x) fast=%s", val, fast ? "yes" : "no");
-            break;
-    }
-}
-
-int hpad_read (struct hpad *h)
+static int hpad_read (struct hpad *h)
 {
     int code = 0;
     int i;
@@ -134,14 +112,75 @@ int hpad_read (struct hpad *h)
             return -1;
         code |= (val<<i);
     }
-    if ((h->flags & HPAD_DEBUG))
-        hpad_dump (code);
     return code;
+}
+
+static void hpad_dump_slew_direction (int val)
+{
+    msg ("hpad: (0x%x) %sRA+ %sRA- %sDEC+ %sDEC-", val,
+         (val & SLEW_RA_PLUS) ? "*" : " ",
+         (val & SLEW_RA_MINUS) ? "*" : " ",
+         (val & SLEW_DEC_PLUS) ? "*" : " ",
+         (val & SLEW_DEC_MINUS) ? "*" : " ");
+}
+
+int hpad_get_slew_direction (struct hpad *h)
+{
+    int result = 0;
+
+    switch (h->val & 0x7) {
+        case (HPAD_KEY_M1 | HPAD_KEY_M2):
+        case HPAD_KEY_M1:
+        case HPAD_KEY_M2:
+            break;
+        case HPAD_KEY_WEST:
+            result = SLEW_RA_MINUS;
+            break;
+        case HPAD_KEY_NORTH:
+            result = SLEW_DEC_PLUS;
+            break;
+        case HPAD_KEY_SOUTH:
+            result = SLEW_DEC_MINUS;
+            break;
+        case HPAD_KEY_EAST:
+            result = SLEW_RA_PLUS;
+            break;
+    }
+    if ((h->flags & HPAD_DEBUG))
+        hpad_dump_slew_direction (result);
+    return result;
+}
+
+int hpad_get_slew_rate (struct hpad *h)
+{
+    int result;
+
+    if ((h->val & HPAD_KEY_FAST))
+        result = SLEW_RATE_FAST;
+    else
+        result = SLEW_RATE_MEDIUM;
+    return result;
+}
+
+int hpad_get_control (struct hpad *h)
+{
+    int result = 0;
+
+    switch ((h->val & 0x7)) {
+        case (HPAD_KEY_M1 | HPAD_KEY_M2):
+            result = HPAD_CONTROL_M1 | HPAD_CONTROL_M2;
+        case HPAD_KEY_M1:
+            result = HPAD_CONTROL_M1;
+        case HPAD_KEY_M2:
+            result = HPAD_CONTROL_M2;
+    }
+    return result;
 }
 
 static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    struct hpad *h = (struct hpad *)((char *)w - offsetof (struct hpad, timer_w));
+    struct hpad *h = (struct hpad *)((char *)w
+                    - offsetof (struct hpad, timer_w));
     int val = hpad_read (h);
     if (val != h->val) {
         h->val = val;
@@ -151,7 +190,8 @@ static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 
 static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct hpad *h = (struct hpad *)((char *)w - offsetof (struct hpad, io_w));
+    struct hpad *h = (struct hpad *)((char *)w
+                    - offsetof (struct hpad, io_w));
     if (!ev_is_active (&h->timer_w)) {
         ev_timer_set (&h->timer_w, h->debounce, 0.);
         ev_timer_start (loop, &h->timer_w);

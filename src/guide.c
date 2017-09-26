@@ -38,6 +38,7 @@
 #include "log.h"
 #include "xzmalloc.h"
 #include "gpio.h"
+#include "slew.h"
 
 #include "guide.h"
 
@@ -89,13 +90,16 @@ void guide_destroy (struct guide *g)
 static void guide_dump (int val)
 {
     msg ("guide: (0x%x) %sRA+ %sRA- %sDEC+ %sDEC-", val,
-         (val & GUIDE_RA_PLUS) ? "*" : " ",
-         (val & GUIDE_RA_MINUS) ? "*" : " ",
-         (val & GUIDE_DEC_PLUS) ? "*" : " ",
-         (val & GUIDE_DEC_MINUS) ? "*" : " ");
+         (val & SLEW_RA_PLUS) ? "*" : " ",
+         (val & SLEW_RA_MINUS) ? "*" : " ",
+         (val & SLEW_DEC_PLUS) ? "*" : " ",
+         (val & SLEW_DEC_MINUS) ? "*" : " ");
 }
 
-int guide_read (struct guide *g)
+/* N.B. guide pins configuration requires pins to be listed in the
+ * same order as slew.h direction bits.
+ */
+int guide_get_slew_direction (struct guide *g)
 {
     int code = 0;
     int i;
@@ -114,8 +118,9 @@ int guide_read (struct guide *g)
 
 static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    struct guide *g = (struct guide *)((char *)w - offsetof (struct guide, timer_w));
-    int val = guide_read (g);
+    struct guide *g = (struct guide *)((char *)w
+                    - offsetof (struct guide, timer_w));
+    int val = guide_get_slew_direction (g);
     if (val != g->val) {
         g->val = val;
         g->cb (g, g->cb_arg);
@@ -124,7 +129,8 @@ static void timer_cb (struct ev_loop *loop, ev_timer *w, int revents)
 
 static void gpio_cb (struct ev_loop *loop, ev_io *w, int revents)
 {
-    struct guide *g = (struct guide *)((char *)w - offsetof (struct guide, io_w));
+    struct guide *g = (struct guide *)((char *)w
+                    - offsetof (struct guide, io_w));
     if (!ev_is_active (&g->timer_w)) {
         ev_timer_set (&g->timer_w, g->debounce, 0.);
         ev_timer_start (loop, &g->timer_w);
@@ -176,7 +182,7 @@ int guide_init (struct guide *g, const char *pins, double debounce,
     g->cb_arg = arg;
     ev_io_init (&g->io_w, gpio_cb, g->efd, EV_READ);
     ev_timer_init (&g->timer_w, timer_cb, g->debounce, 0.);
-    g->val = guide_read (g);
+    g->val = guide_get_slew_direction (g);
     rc = 0;
 done:
     if (cpy)

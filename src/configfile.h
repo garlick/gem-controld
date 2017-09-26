@@ -11,8 +11,11 @@ struct config_axis {
     int accel;
     int decel;
     int steps;
+    double guide;
     double slow;
+    double medium;
     double fast;
+    double sidereal;
 };
 
 struct config {

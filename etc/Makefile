@@ -8,5 +8,5 @@ install: gem.service install_cli
 	cp gem.service /etc/systemd/system/gem.service
 	systemctl enable gem.service
 
-install_cli: config.ini
+install_cfg: config.ini
 	cp config.ini $(prefix)/etc/gem.config

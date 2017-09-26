@@ -7,16 +7,6 @@ enum {
     LX200_DEBUG = 1,
 };
 
-/* mask returned from lx200_get_slew
- */
-enum {
-    LX200_SLEW_NONE = 0,
-    LX200_SLEW_NORTH = 1,
-    LX200_SLEW_SOUTH = 2,
-    LX200_SLEW_EAST = 4,
-    LX200_SLEW_WEST = 8,
-};
-
 struct lx200;
 typedef void (*lx200_cb_t)(struct lx200 *lx, void *arg);
 
@@ -45,7 +35,8 @@ void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg);
 /* Set t,d position in degrees.
  */
 void lx200_set_position (struct lx200 *lx, double t, double d);
-int lx200_get_slew (struct lx200 *lx);
+int lx200_get_slew_direction (struct lx200 *lx);
+int lx200_get_slew_rate  (struct lx200 *lx);
 void lx200_get_target (struct lx200 *lx, double *t, double *d);
 
 void lx200_start (struct ev_loop *loop, struct lx200 *lx);

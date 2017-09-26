@@ -73,15 +73,6 @@ int main (int argc, char *argv[])
             case 'c':   /* --config FILE */
                 config_filename = xstrdup (optarg);
                 break;
-        }
-    }
-    configfile_init (config_filename, &cfg);
-
-    optind = 0;
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'c':   /* --config FILE (handled above) */
-                break;
             case 'h':   /* --help */
             default:
                 usage ();
@@ -89,6 +80,7 @@ int main (int argc, char *argv[])
     }
     if (optind < argc)
         usage ();
+    configfile_init (config_filename, &cfg);
     if (!cfg.hpad_gpio)
         msg_exit ("hpad_gpio was not configured");
     if (!cfg.guide_gpio)
@@ -126,19 +118,16 @@ int main (int argc, char *argv[])
 
 void hpad_cb (struct hpad *h, void *arg)
 {
-    int val;
-
-    if ((val = hpad_read (h)) < 0) {
-        err ("hpad");
-        return;
-    }
+    hpad_get_slew_direction (h);
+    hpad_get_slew_rate (h);
+    hpad_get_control (h);
 }
 
 void guide_cb (struct guide *g, void *arg)
 {
     int val;
 
-    if ((val = guide_read (g)) < 0) {
+    if ((val = guide_get_slew_direction (g)) < 0) {
         err ("guide");
         return;
     }
