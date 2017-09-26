@@ -41,7 +41,6 @@
 
 struct motion {
     int fd;
-    char *devname;
     char *name;
     int flags;
 };
@@ -197,11 +196,12 @@ done:
 
 /* Open/configure the serial port
  */
-static int mopen (struct motion *m)
+static int mopen (const char *devname)
 {
     struct termios tio;
+    int fd;
 
-    if ((m->fd = open(m->devname, O_RDWR | O_NOCTTY)) < 0)
+    if ((fd = open (devname, O_RDWR | O_NOCTTY)) < 0)
         return -1;
     memset (&tio, 0, sizeof (tio));
     tio.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
@@ -210,8 +210,12 @@ static int mopen (struct motion *m)
     tio.c_lflag = 0;
     tio.c_cc[VTIME] = 0; /* no timeout */
     tio.c_cc[VMIN] = 1;  /* block until 1 char available */
-    tcflush (m->fd, TCIFLUSH);
-    return tcsetattr(m->fd, TCSANOW, &tio);
+    tcflush (fd, TCIFLUSH);
+    if (tcsetattr(fd, TCSANOW, &tio) < 0) {
+        close (fd);
+        return -1;
+    }
+    return fd;
 }
 
 /* Cold start: send " \r", read 2 banner lines and "#".
@@ -265,60 +269,6 @@ static int mexamine (struct motion *m)
     return 0;
 }
 
-struct motion *motion_init (const char *devname, const char *name, int flags,
-                            bool *coldstart)
-{
-    struct motion *m;
-    int saved_errno;
-
-    if (!(m = malloc (sizeof (*m))) || !(m->devname = strdup (devname))
-                                    || !(m->name = strdup (name))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    m->flags = flags;
-    m->fd = -1;
-    if (mopen (m) < 0)
-        goto error;
-    if (m->flags & MOTION_RESET) {
-        if (mreset (m) < 0)
-            goto error;
-    }
-    if (mhello (m, coldstart) < 0)
-        goto error;
-    if (m->flags & MOTION_DEBUG) {
-        if (mexamine (m) < 0)
-            goto error;
-    }
-    if (mping (m, 2) < 0)
-        goto error;
-    return m;
-error:
-    saved_errno = errno;
-    motion_fini (m);
-    errno = saved_errno;
-    return NULL;
-}
-
-void motion_fini (struct motion *m)
-{
-    if (m) {
-        if (m->fd >= 0) {
-            (void)mcmd (m, "M0");
-            (void)close (m->fd);
-        }
-        if (m->devname)
-            free (m->devname);
-        if (m->name)
-            free (m->name);
-        free (m);
-    }
-}
-
-const char *motion_name (struct motion *m)
-{
-    return m->name;
-}
 
 int motion_set_resolution (struct motion *m, int res)
 {
@@ -463,6 +413,62 @@ int motion_get_port (struct motion *m, uint8_t *val)
         return -1;
     *val = v;
     return 0;
+}
+
+int motion_init (struct motion *m, const char *devname, int flags,
+                 bool *coldstart)
+{
+    if (m->fd != -1) {
+        errno = EINVAL;
+        goto error;
+    }
+    if ((m->fd = mopen (devname)) < 0)
+        goto error;
+    m->flags = flags;
+    if ((m->flags & MOTION_RESET)) {
+        if (mreset (m) < 0)
+            goto error;
+    }
+    if (mhello (m, coldstart) < 0)
+        goto error;
+    if (m->flags & MOTION_DEBUG) {
+        if (mexamine (m) < 0)
+            goto error;
+    }
+    if (mping (m, 2) < 0)
+        goto error;
+    return 0;
+error:
+    return -1;
+}
+
+const char *motion_get_name (struct motion *m)
+{
+    return m->name;
+}
+
+void motion_destroy (struct motion *m)
+{
+    if (m) {
+        if (m->fd >= 0)
+            (void)close (m->fd);
+        free (m->name);
+        free (m);
+    }
+}
+
+struct motion *motion_new (const char *name)
+{
+    struct motion *m;
+    if (!(m = calloc (1, sizeof (*m))))
+        goto error;
+    m->fd = -1;
+    if (!(m->name = strdup (name)))
+        goto error;
+    return m;
+error:
+    motion_destroy (m);
+    return NULL;
 }
 
 /*

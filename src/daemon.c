@@ -216,10 +216,8 @@ int main (int argc, char *argv[])
     hpad_stop (ctx.loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
 
-    if (ctx.d)
-        motion_fini (ctx.d);
-    if (ctx.t)
-        motion_fini (ctx.t);
+    motion_destroy (ctx.d);
+    motion_destroy (ctx.t);
 
     return 0;
 }
@@ -231,8 +229,10 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 
     if (!a->device)
         msg_exit ("%s: no serial device configured", name);
-    if (!(m = motion_init (a->device, name, flags, &coldstart)))
-        err_exit ("%s: init %s", name, a->device);
+    if (!(m = motion_new (name)))
+        err_exit ("%s: motion_create", name);
+    if (motion_init (m, a->device, flags, &coldstart) < 0)
+        err_exit ("%s: motion_init %s", name, a->device);
     if (coldstart) {
         if (motion_set_current (m, a->ihold, a->irun) < 0)
             err_exit ("%s: set current", name);

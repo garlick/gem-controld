@@ -7,17 +7,6 @@ enum {
 
 struct motion;
 
-/* Initialize communications with indexer on 'devname'.
- */
-struct motion *motion_init (const char *devname, const char *name, int flags,
-                            bool *coldstart);
-
-/* Disconnect from indexer, stopping motion if any.
- */
-void motion_fini (struct motion *m);
-
-const char *motion_name (struct motion *m);
-
 /* Set microstep resolution (0:8)
  */
 int motion_set_resolution (struct motion *m, int resolution);
@@ -96,6 +85,18 @@ int motion_get_port (struct motion *m, uint8_t *val);
 /* Write 6-bit GPIO port.
  */
 int motion_set_port (struct motion *m, uint8_t val);
+
+/* Get name associated with motion axis at creation.
+ */
+const char *motion_get_name (struct motion *m);
+
+/* Initialization
+ */
+int motion_init (struct motion *m, const char *device, int flags,
+                 bool *coldstart);
+
+struct motion *motion_new (const char *name);
+void motion_destroy (struct motion *m);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
