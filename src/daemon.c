@@ -246,8 +246,8 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
             err_exit ("%s: set initial velocity", name);
         if (motion_set_final_velocity (m, a->finalv) < 0)
             err_exit ("%s: set final velocity", name);
-        if (motion_set_port (m, GREEN_LED_MASK | WHITE_LED_MASK
-                                               | BLUE_LED_MASK) < 0)
+        if (motion_set_io (m, MOTION_IO_OUTPUT1 | MOTION_IO_OUTPUT2
+                                                | MOTION_IO_OUTPUT3) < 0)
             err_exit ("%s: motion set port", name);
     }
     return m;

@@ -5,6 +5,15 @@ enum {
     MOTION_RESET = 0x02,    /* perform factory reset */
 };
 
+enum {
+    MOTION_IO_INPUT1    = 0x01,
+    MOTION_IO_INPUT2    = 0x02,
+    MOTION_IO_INPUT3    = 0x04,
+    MOTION_IO_OUTPUT1   = 0x08, // ^green_led on daughter board
+    MOTION_IO_OUTPUT2   = 0x10, // ^white_led
+    MOTION_IO_OUTPUT3   = 0x20, // ^blue_led
+};
+
 struct motion;
 
 /* Set microstep resolution (0:8)
@@ -69,22 +78,10 @@ int motion_get_status (struct motion *m, uint8_t *status);
  */
 int motion_set_origin (struct motion *m);
 
-/* Read 6-bit GPIO port.  Bits are:
- *  0 in-1
- *  1 in-2
- *  2 in-3
- *  3 out-1   (green LED: 0=on, 1=off)
- *  4 out-2   (white LED: 0=on, 1=off)
- *  5 out-3   (blue LED: 0=on, 1=off)
+/* Read/write io port
  */
-#define GREEN_LED_MASK  (1<<3)
-#define WHITE_LED_MASK  (1<<4)
-#define BLUE_LED_MASK  (1<<5)
-int motion_get_port (struct motion *m, uint8_t *val);
-
-/* Write 6-bit GPIO port.
- */
-int motion_set_port (struct motion *m, uint8_t val);
+int motion_get_io (struct motion *m, uint8_t *val);
+int motion_set_io (struct motion *m, uint8_t val);
 
 /* Get name associated with motion axis at creation.
  */

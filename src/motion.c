@@ -391,16 +391,12 @@ int motion_stop (struct motion *m)
     return mcmd (m, "@");
 }
 
-int motion_set_port (struct motion *m, uint8_t val)
+int motion_set_io (struct motion *m, uint8_t val)
 {
-    if (val & 0b11000111) {
-        errno = EINVAL;
-        return -1;
-    }
     return mcmd (m, "A%d", val);
 }
 
-int motion_get_port (struct motion *m, uint8_t *val)
+int motion_get_io (struct motion *m, uint8_t *val)
 {
     char buf[max_cmdline];
     int v;
