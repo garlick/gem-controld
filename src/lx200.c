@@ -74,6 +74,7 @@ struct lx200 {
     struct callback pos;
     struct callback slew;
     struct callback gto;
+    struct callback stop;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
@@ -218,8 +219,13 @@ static int process_command (struct client *c, const char *cmd)
         new_slew_mask &= ~SLEW_DEC_PLUS;
     else if (!strcmp (cmd, ":Qs#"))
         new_slew_mask &= ~SLEW_DEC_MINUS;
-    else if (!strcmp (cmd, ":Q#"))
+    else if (!strcmp (cmd, ":Q#")) {
+        if (c->lx->stop.cb) {
+            c->lx->stop.cb (c->lx, c->lx->stop.arg);
+            c->lx->slew_mask = 0; // avoid redundant stop command
+        }
         new_slew_mask = 0;
+    }
     /* :SrHH:MM.T# or :SrHH:MM:SS# - set target object RA
      */
     else if (!strncmp (cmd, ":Sr", 3)) {
@@ -444,6 +450,12 @@ void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
     lx->gto.cb = cb;
     lx->gto.arg = arg;
+}
+
+void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
+{
+    lx->stop.cb = cb;
+    lx->stop.arg = arg;
 }
 
 int lx200_init (struct lx200 *lx, int port, int flags)

@@ -2,9 +2,10 @@
 
 enum {
     MOTION_DEBUG = 0x01,    /* send telemetry to stderr */
-    MOTION_RESET = 0x02,    /* perform factory reset */
 };
 
+/* Bits for motion_set_io(), motion_get_io() mask.
+ */
 enum {
     MOTION_IO_INPUT1    = 0x01,
     MOTION_IO_INPUT2    = 0x02,
@@ -14,42 +15,31 @@ enum {
     MOTION_IO_OUTPUT3   = 0x20, // ^blue_led
 };
 
+/* Bits for motion_get_status() mask.
+ */
 enum {
-    MOTION_STATUS_MOVING    = 0x01,
-    MOTION_STATUS_TRACKING  = 0x02,
-    MOTION_STATUS_HOMING    = 0x08,
-    MOTION_STATUS_HUNTING   = 0x10,
-    MOTION_STATUS_RAMPING   = 0x20,
+    MOTION_STATUS_MOVING    = 0x01, // axis moving
+    MOTION_STATUS_CONSTANT  = 0x02, // constant velocity
+    MOTION_STATUS_HOMING    = 0x08, // homing routine is active
+    MOTION_STATUS_HUNTING   = 0x10, // encoder correction
+    MOTION_STATUS_RAMPING   = 0x20, // ramping up or down
 };
 
+struct motion_config {
+    int resolution;     // microstep resolution (0:8)
+    int ihold;          // hold current in pct of max (0-100)
+    int irun;           // hold current in pct of max (0-100)
+    int accel;          // acceleration slope (0-255)
+    int decel;          // deceleration slope (0-255)
+    int mode;           // resolution mode (0=fixed, 1=auto)
+    int initv;          // initial velocity for ramp up (20:20000)
+                        //   in full steps/s (auto), or pulses/s (fixed)
+    int finalv;         // final velocity for ramp up (20:20000)
+};                      //   in full steps/s (auto), or pulses/s (fixed)
+
 struct motion;
+typedef void (*motion_cb_f)(struct motion *m, void *arg);
 
-/* Set microstep resolution (0:8)
- */
-int motion_set_resolution (struct motion *m, int resolution);
-
-/* Set hold/run current limit in pct of max (0-100)
- */
-int motion_set_current (struct motion *m, int hold, int run);
-
-/* Set acceleration/deceleration slope (0-255)
- */
-int motion_set_acceleration (struct motion *m, int accel, int decel);
-
-/* Set resolution mode
- * 0=fixed, 1=auto
- */
-int motion_set_mode (struct motion *m, int mode);
-
-/* Set initial velocity for ramp-up, 20:20000
- * In full steps per sec (auto mode), or pulses per sec (fixed mode).
- */
-int motion_set_initial_velocity (struct motion *m, int velocity);
-
-/* Set fnial velocity for ramp-up, 20:20000
- * In full steps per sec (auto mode), or pulses per sec (fixed mode).
- */
-int motion_set_final_velocity (struct motion *m, int velocity);
 
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.
@@ -71,9 +61,13 @@ int motion_goto_relative (struct motion *m, double offset);
  */
 int motion_soft_stop (struct motion *m);
 
+/* Abort motion without deceleration.
+ */
+int motion_abort (struct motion *m);
+
 /* Read moving status.
  */
-int motion_get_status (struct motion *m, uint8_t *status);
+int motion_get_status (struct motion *m, int *status);
 
 /* Set internal position counter to zero.
  */
@@ -88,13 +82,24 @@ int motion_set_io (struct motion *m, uint8_t val);
  */
 const char *motion_get_name (struct motion *m);
 
-/* Initialization
+/* Set callback to be called when a goto has completed.
  */
-int motion_init (struct motion *m, const char *device, int flags,
-                 bool *coldstart);
+void motion_set_cb (struct motion *m, motion_cb_f cb, void *arg);
+
+/* Initialization
+ * Performs a reset, equivalent to the power-up condition (zeroes origin).
+ * Configure from motion_config struct, or if NULL, use nvram settings.
+ */
+int motion_init (struct motion *m, const char *device,
+                 struct motion_config *cfg, int flags);
 
 struct motion *motion_new (const char *name);
 void motion_destroy (struct motion *m);
+
+/* Start/stop watchers.
+ */
+void motion_start (struct ev_loop *loop, struct motion *m);
+void motion_stop (struct ev_loop *loop, struct motion *m);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

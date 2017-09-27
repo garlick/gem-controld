@@ -32,6 +32,10 @@ void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
  */
 void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
 
+/* Register callback that is triggered when protocol wants to stop all motion.
+ */
+void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
+
 /* Set t,d position in degrees.
  */
 void lx200_set_position (struct lx200 *lx, double t, double d);
