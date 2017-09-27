@@ -324,7 +324,7 @@ int motion_set_final_velocity (struct motion *m, int velocity)
     return mcmd (m, "V%d", velocity);
 }
 
-int motion_set_velocity (struct motion *m, int velocity)
+int motion_move_constant (struct motion *m, int velocity)
 {
     if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {
         errno = EINVAL;

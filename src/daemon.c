@@ -307,7 +307,7 @@ int lookup_rate (struct config_axis *axis, int rate,
  * handle this, even if direction is reversed.  The "key release" cancels
  * this and any other slew in progress.  The axes are independent.
  * It is possible to configure slew rates that will result in a controller
- * error;  motion_set_velocity() will return -1 with errno == EINVAL in
+ * error;  motion_move_constant() will return -1 with errno == EINVAL in
  * that case and the slew will fail.
  */
 void slew_update (struct prog_context *ctx, int newmask, int rate)
@@ -320,16 +320,16 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     if ((newmask & SLEW_RA_PLUS) || (newmask & SLEW_RA_MINUS)) {
         int cv = lookup_rate (&ctx->opt.t, rate, (newmask & SLEW_RA_MINUS),
                               ctx->t_tracking, ctx->west);
-        if (motion_set_velocity (ctx->t, cv) < 0)
-            err ("t: set velocity %d", cv);
+        if (motion_move_constant (ctx->t, cv) < 0)
+            err ("t: move at v=%d", cv);
     }
     else {
         if ((ctx->slew & SLEW_RA_PLUS) || (ctx->slew & SLEW_RA_MINUS)) {
             if (ctx->t_tracking) {
                 int cv = lookup_rate (&ctx->opt.t, 0, false,
                                      ctx->t_tracking, ctx->west);
-                if (motion_set_velocity (ctx->t, cv) < 0)
-                    err ("t: set velocity %d", cv);
+                if (motion_move_constant (ctx->t, cv) < 0)
+                    err ("t: move at v=%d", cv);
             }
             else {
                 if (motion_soft_stop (ctx->t) < 0)
@@ -340,8 +340,8 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     if ((newmask & SLEW_DEC_PLUS) || (newmask & SLEW_DEC_MINUS)) {
         int cv = lookup_rate (&ctx->opt.d, rate, (newmask & SLEW_DEC_MINUS),
                               false, false);
-        if (motion_set_velocity (ctx->d, cv) < 0)
-            err ("d: set velocity %d", cv);
+        if (motion_move_constant (ctx->d, cv) < 0)
+            err ("d: move at v=%d", cv);
     }
     else {
         if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
@@ -384,8 +384,8 @@ void hpad_cb (struct hpad *h, void *arg)
             if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
                 int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
                                       true, ctx->west);
-                if (motion_set_velocity (ctx->t, cv) < 0)
-                    err ("t: set velocity %d", cv);
+                if (motion_move_constant (ctx->t, cv) < 0)
+                    err ("t: move at v=%d", cv);
             }
             ctx->t_tracking = true;
         }

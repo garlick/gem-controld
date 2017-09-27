@@ -54,7 +54,7 @@ int motion_set_final_velocity (struct motion *m, int velocity);
 /* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
  * with ramp up or ramp down.
  */
-int motion_set_velocity (struct motion *m, int velocity);
+int motion_move_constant (struct motion *m, int velocity);
 
 /* Query current position.
  */
