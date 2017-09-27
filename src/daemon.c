@@ -332,7 +332,7 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
                     err ("t: set velocity %d", cv);
             }
             else {
-                if (motion_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0)
                     err ("t: stop");
             }
         }
@@ -345,7 +345,7 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     }
     else {
         if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
-            if (motion_stop (ctx->d) < 0)
+            if (motion_soft_stop (ctx->d) < 0)
                 err ("d: stop");
         }
     }
@@ -362,9 +362,9 @@ void hpad_cb (struct hpad *h, void *arg)
     /* M1 - emergency stop
      */
     if ((ctrl & HPAD_CONTROL_M1)) {
-        if (motion_stop (ctx->t) < 0)
+        if (motion_soft_stop (ctx->t) < 0)
             err ("t: stop");
-        if (motion_stop (ctx->d) < 0)
+        if (motion_soft_stop (ctx->d) < 0)
             err ("d: stop");
         ctx->t_tracking = false;
         ctx->slew = 0;
@@ -375,7 +375,7 @@ void hpad_cb (struct hpad *h, void *arg)
     if ((ctrl & HPAD_CONTROL_M2)) {
         if (ctx->t_tracking) {
             if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
-                if (motion_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0)
                     err ("t: stop");
             }
             ctx->t_tracking = false;

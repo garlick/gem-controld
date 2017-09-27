@@ -69,7 +69,7 @@ int motion_goto_relative (struct motion *m, double offset);
 
 /* Execute a "soft stop" (with deceleration) on all motion.
  */
-int motion_stop (struct motion *m);
+int motion_soft_stop (struct motion *m);
 
 /* Read moving status.
  */

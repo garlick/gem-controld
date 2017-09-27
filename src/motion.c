@@ -386,7 +386,7 @@ int motion_set_origin (struct motion *m)
     return mcmd (m, "O");
 }
 
-int motion_stop (struct motion *m)
+int motion_soft_stop (struct motion *m)
 {
     return mcmd (m, "@");
 }
