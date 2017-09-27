@@ -14,6 +14,14 @@ enum {
     MOTION_IO_OUTPUT3   = 0x20, // ^blue_led
 };
 
+enum {
+    MOTION_STATUS_MOVING    = 0x01,
+    MOTION_STATUS_TRACKING  = 0x02,
+    MOTION_STATUS_HOMING    = 0x08,
+    MOTION_STATUS_HUNTING   = 0x10,
+    MOTION_STATUS_RAMPING   = 0x20,
+};
+
 struct motion;
 
 /* Set microstep resolution (0:8)
@@ -67,11 +75,6 @@ int motion_stop (struct motion *m);
 
 /* Read moving status.
  */
-#define MOTION_STATUS_MOVING    0x01
-#define MOTION_STATUS_TRACKING  0x02
-#define MOTION_STATUS_HOMING    0x08
-#define MOTION_STATUS_HUNTING   0x10
-#define MOTION_STATUS_RAMPING   0x20
 int motion_get_status (struct motion *m, uint8_t *status);
 
 /* Set internal position counter to zero.
