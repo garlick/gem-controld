@@ -60,14 +60,12 @@ int motion_set_velocity (struct motion *m, int velocity);
  */
 int motion_get_position (struct motion *m, double *position);
 
-/* Slew to position relative to origin.
+/* Slew the to absolute or relative position.  position/offset is in full
+ * steps, with a resolution of 0.01 step.  Motor will ramp up and ramp down
+ * automatically.
  */
-int motion_set_position (struct motion *m, double position);
-
-/* Slew the to current position + offset.  Offset is in full steps, with
- * a resolution of 0.01 step.  Motor will ramp up and ramp down automatically.
- */
-int motion_set_index (struct motion *m, double offset);
+int motion_goto_absolute (struct motion *m, double position);
+int motion_goto_relative (struct motion *m, double offset);
 
 /* Execute a "soft stop" (with deceleration) on all motion.
  */

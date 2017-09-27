@@ -473,9 +473,9 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
     t = t_degrees/360.0 * ctx->opt.t.steps;
     d = d_degrees/360.0 * ctx->opt.d.steps;
 
-    if (motion_set_position (ctx->t, ctx->west ? t : -1*t) < 0)
+    if (motion_goto_absolute (ctx->t, ctx->west ? t : -1*t) < 0)
         err ("t: set position");
-    if (motion_set_position (ctx->d, d) < 0)
+    if (motion_goto_absolute (ctx->d, d) < 0)
         err ("t: set position");
 }
 

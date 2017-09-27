@@ -348,7 +348,7 @@ int motion_get_position (struct motion *m, double *position)
     return 0;
 }
 
-int motion_set_position (struct motion *m, double position)
+int motion_goto_absolute (struct motion *m, double position)
 {
     if (fabs (position) > 8388607.9) {
         errno = EINVAL;
@@ -372,7 +372,7 @@ int motion_get_status (struct motion *m, uint8_t *status)
     return 0;
 }
 
-int motion_set_index (struct motion *m, double offset)
+int motion_goto_relative (struct motion *m, double offset)
 {
     if (fabs (offset) < 0.01 || fabs (offset) > 8388607.99) {
         errno = EINVAL;
