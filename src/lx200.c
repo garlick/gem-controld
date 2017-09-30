@@ -62,16 +62,18 @@ struct client {
     int num;
 };
 
+struct callback {
+    lx200_cb_f cb;
+    void *arg;
+};
+
 struct lx200 {
     int flags;
     int port;
     int fd;
-    lx200_cb_t pos_cb;
-    void *pos_cb_arg;
-    lx200_cb_t slew_cb;
-    void *slew_cb_arg;
-    lx200_cb_t goto_cb;
-    void *goto_cb_arg;
+    struct callback pos;
+    struct callback slew;
+    struct callback gto;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
@@ -178,8 +180,8 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":GR#")) {
         int hr, min;
         double sec;
-        if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        if (c->lx->pos.cb)
+            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
         point_set_position (c->lx->point, c->lx->t, c->lx->d);
         point_get_position_ra (c->lx->point, &hr, &min, &sec);
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
@@ -189,8 +191,8 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":GD#")) {
         int deg, min;
         double sec;
-        if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        if (c->lx->pos.cb)
+            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
         point_set_position (c->lx->point, c->lx->t, c->lx->d);
         point_get_position_dec (c->lx->point, &deg, &min, &sec);
         rc = wpf (c, "%+.2d*%.2d'%.2d#", deg, min, (int)sec);
@@ -251,8 +253,8 @@ static int process_command (struct client *c, const char *cmd)
     /* :CM# - sync telescope's position with currently slected db object coord
      */
     else if (!strcmp (cmd, ":CM#")) {
-        if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
+        if (c->lx->pos.cb)
+            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
         point_set_position (c->lx->point, c->lx->t, c->lx->d);
         point_sync_target (c->lx->point);
         rc = wpf (c, "You Are Here#");
@@ -260,10 +262,10 @@ static int process_command (struct client *c, const char *cmd)
     /* :MS# - slew to target object
      */
     else if (!strcmp (cmd, ":MS#")) {
-        if (c->lx->pos_cb)
-            c->lx->pos_cb (c->lx, c->lx->pos_cb_arg); // update position t,d
-        if (c->lx->goto_cb)
-            c->lx->goto_cb (c->lx, c->lx->goto_cb_arg);
+        if (c->lx->pos.cb)
+            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
+        if (c->lx->gto.cb)
+            c->lx->gto.cb (c->lx, c->lx->gto.arg);
         rc = write_all (c, "0", 1); // 0 = sucess
                                     // 1<string># - object below horizon
                                     // 2<string># - other...
@@ -273,8 +275,8 @@ static int process_command (struct client *c, const char *cmd)
      */
     if (c->lx->slew_mask != new_slew_mask) {
         c->lx->slew_mask = new_slew_mask;
-        if (c->lx->slew_cb)
-            c->lx->slew_cb (c->lx, c->lx->slew_cb_arg);
+        if (c->lx->slew.cb)
+            c->lx->slew.cb (c->lx, c->lx->slew.arg);
     }
 
     /* Ignore command if it is not recognized.
@@ -415,10 +417,10 @@ int lx200_get_slew_rate (struct lx200 *lx)
     return lx->slew_rate;
 }
 
-void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
+void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
-    lx->slew_cb = cb;
-    lx->slew_cb_arg = arg;
+    lx->slew.cb = cb;
+    lx->slew.arg = arg;
 }
 
 void lx200_set_position (struct lx200 *lx, double t, double d)
@@ -427,10 +429,10 @@ void lx200_set_position (struct lx200 *lx, double t, double d)
     lx->d = d;
 }
 
-void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
+void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
-    lx->pos_cb = cb;
-    lx->pos_cb_arg = arg;
+    lx->pos.cb = cb;
+    lx->pos.arg = arg;
 }
 
 void lx200_get_target (struct lx200 *lx, double *t, double *d)
@@ -438,10 +440,10 @@ void lx200_get_target (struct lx200 *lx, double *t, double *d)
     point_get_target (lx->point, t, d);
 }
 
-void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_t cb, void *arg)
+void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
-    lx->goto_cb = cb;
-    lx->goto_cb_arg = arg;
+    lx->gto.cb = cb;
+    lx->gto.arg = arg;
 }
 
 int lx200_init (struct lx200 *lx, int port, int flags)
