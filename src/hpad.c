@@ -155,10 +155,16 @@ int hpad_get_slew_rate (struct hpad *h)
 {
     int result;
 
-    if ((h->val & HPAD_KEY_FAST))
+    if ((h->val & HPAD_KEY_FAST)) {
+        if ((h->flags & HPAD_DEBUG))
+            msg ("hpad: rate=fast");
         result = SLEW_RATE_FAST;
-    else
+    }
+    else {
+        if ((h->flags & HPAD_DEBUG))
+            msg ("hpad: rate=slow");
         result = SLEW_RATE_MEDIUM;
+    }
     return result;
 }
 
@@ -168,11 +174,20 @@ int hpad_get_control (struct hpad *h)
 
     switch ((h->val & 0x7)) {
         case (HPAD_KEY_M1 | HPAD_KEY_M2):
+            if ((h->flags & HPAD_DEBUG))
+                msg ("hpad: control=M1+M2");
             result = HPAD_CONTROL_M1 | HPAD_CONTROL_M2;
+            break;
         case HPAD_KEY_M1:
+            if ((h->flags & HPAD_DEBUG))
+                msg ("hpad: control=M1");
             result = HPAD_CONTROL_M1;
+            break;
         case HPAD_KEY_M2:
+            if ((h->flags & HPAD_DEBUG))
+                msg ("hpad: control=M2");
             result = HPAD_CONTROL_M2;
+            break;
     }
     return result;
 }
