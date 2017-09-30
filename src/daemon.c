@@ -67,13 +67,15 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags);
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
+void motion_cb (struct motion *m, void *arg);
 void lx200_pos_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
+void lx200_stop_cb (struct lx200 *lx, void *arg);
 
 int controller_velocity (struct config_axis *axis, double degrees_persec);
 
-#define OPTIONS "+c:hMBLHGwf"
+#define OPTIONS "+c:hMBLHGw"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
     {"help",                 no_argument,       0, 'h'},
@@ -83,7 +85,6 @@ static const struct option longopts[] = {
     {"debug-hpad",           no_argument,       0, 'H'},
     {"debug-guide",          no_argument,       0, 'G'},
     {"west",                 no_argument,       0, 'w'},
-    {"force",                no_argument,       0, 'f'},
     {0, 0, 0, 0},
 };
 
@@ -98,7 +99,6 @@ static void usage (void)
 "    -L,--debug-lx200    emit lx200 protocol to stderr\n"
 "    -H,--debug-hpad     emit hpad events to stderr\n"
 "    -G,--debug-guide    emit guide pulse events to stderr\n"
-"    -f,--force          force motion controller reset (must reset origin)\n"
 );
     exit (1);
 }
@@ -139,9 +139,6 @@ int main (int argc, char *argv[])
             case 'G':   /* --debug-guide */
                 guide_flags |= GUIDE_DEBUG;
                 break;
-            case 'f':   /* --force */
-                motion_flags |= MOTION_RESET;
-                break;
             case 'w':   /* --west */
                 ctx.west = true;
                 break;
@@ -162,18 +159,12 @@ int main (int argc, char *argv[])
         err_exit ("ev_loop_new");
 
     ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
-    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
+    motion_set_cb (ctx.t, motion_cb, &ctx);
+    motion_start (ctx.loop, ctx.t);
 
-    /* Initialize t_tracking state from actual state of t motion controller.
-     * If the daemon was restarted, we should retain this state.
-     */
-    uint8_t t_status;
-    if (motion_get_status (ctx.t, &t_status) < 0)
-        err_exit ("motion_get_status t");
-    if (t_status != 0)
-        ctx.t_tracking = true;
-    msg ("tracking in RA is %s - press handpad M2 button to toggle",
-          ctx.t_tracking ? "enabled" : "disabled");
+    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
+    motion_set_cb (ctx.d, motion_cb, &ctx);
+    motion_start (ctx.loop, ctx.d);
 
     ctx.hpad = hpad_new ();
     if (hpad_init (ctx.hpad, ctx.opt.hpad_gpio, ctx.opt.hpad_debounce,
@@ -199,6 +190,7 @@ int main (int argc, char *argv[])
     lx200_set_position_cb (ctx.lx200, lx200_pos_cb, &ctx);
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
     lx200_set_goto_cb (ctx.lx200, lx200_goto_cb, &ctx);
+    lx200_set_stop_cb (ctx.lx200, lx200_stop_cb, &ctx);
     lx200_start (ctx.loop, ctx.lx200);
 
     ev_run (ctx.loop, 0);
@@ -216,40 +208,35 @@ int main (int argc, char *argv[])
     hpad_stop (ctx.loop, ctx.hpad);
     hpad_destroy (ctx.hpad);
 
-    if (ctx.d)
-        motion_fini (ctx.d);
-    if (ctx.t)
-        motion_fini (ctx.t);
+    motion_destroy (ctx.d);
+    motion_destroy (ctx.t);
 
     return 0;
 }
 
 struct motion *init_axis (struct config_axis *a, const char *name, int flags)
 {
+    struct motion_config cfg = {
+        .resolution = a->resolution,
+        .ihold      = a->ihold,
+        .irun       = a->irun,
+        .mode       = a->mode,
+        .accel      = a->accel,
+        .decel      = a->decel,
+        .initv      = a->initv,
+        .finalv     = a->finalv,
+    };
     struct motion *m;
-    bool coldstart;
 
     if (!a->device)
         msg_exit ("%s: no serial device configured", name);
-    if (!(m = motion_init (a->device, name, flags, &coldstart)))
-        err_exit ("%s: init %s", name, a->device);
-    if (coldstart) {
-        if (motion_set_current (m, a->ihold, a->irun) < 0)
-            err_exit ("%s: set current", name);
-        if (motion_set_mode (m, a->mode) < 0)
-            err_exit ("%s: set mode", name);
-        if (motion_set_resolution (m, a->resolution) < 0)
-            err_exit ("%s: set resolution", name);
-        if (motion_set_acceleration (m, a->accel, a->decel) < 0)
-            err_exit ("%s: set acceleration", name);
-        if (motion_set_initial_velocity (m, a->initv) < 0)
-            err_exit ("%s: set initial velocity", name);
-        if (motion_set_final_velocity (m, a->finalv) < 0)
-            err_exit ("%s: set final velocity", name);
-        if (motion_set_port (m, GREEN_LED_MASK | WHITE_LED_MASK
-                                               | BLUE_LED_MASK) < 0)
-            err_exit ("%s: motion set port", name);
-    }
+    if (!(m = motion_new (name)))
+        err_exit ("%s: motion_create", name);
+    if (motion_init (m, a->device, &cfg, flags) < 0)
+        err_exit ("%s: motion_init %s", name, a->device);
+    if (motion_set_io (m, MOTION_IO_OUTPUT1 | MOTION_IO_OUTPUT2
+                                            | MOTION_IO_OUTPUT3) < 0)
+        err_exit ("%s: motion set port", name);
     return m;
 }
 
@@ -307,7 +294,7 @@ int lookup_rate (struct config_axis *axis, int rate,
  * handle this, even if direction is reversed.  The "key release" cancels
  * this and any other slew in progress.  The axes are independent.
  * It is possible to configure slew rates that will result in a controller
- * error;  motion_set_velocity() will return -1 with errno == EINVAL in
+ * error;  motion_move_constant() will return -1 with errno == EINVAL in
  * that case and the slew will fail.
  */
 void slew_update (struct prog_context *ctx, int newmask, int rate)
@@ -320,19 +307,19 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     if ((newmask & SLEW_RA_PLUS) || (newmask & SLEW_RA_MINUS)) {
         int cv = lookup_rate (&ctx->opt.t, rate, (newmask & SLEW_RA_MINUS),
                               ctx->t_tracking, ctx->west);
-        if (motion_set_velocity (ctx->t, cv) < 0)
-            err ("t: set velocity %d", cv);
+        if (motion_move_constant (ctx->t, cv) < 0)
+            err ("t: move at v=%d", cv);
     }
     else {
         if ((ctx->slew & SLEW_RA_PLUS) || (ctx->slew & SLEW_RA_MINUS)) {
             if (ctx->t_tracking) {
                 int cv = lookup_rate (&ctx->opt.t, 0, false,
                                      ctx->t_tracking, ctx->west);
-                if (motion_set_velocity (ctx->t, cv) < 0)
-                    err ("t: set velocity %d", cv);
+                if (motion_move_constant (ctx->t, cv) < 0)
+                    err ("t: move at v=%d", cv);
             }
             else {
-                if (motion_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0)
                     err ("t: stop");
             }
         }
@@ -340,12 +327,12 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     if ((newmask & SLEW_DEC_PLUS) || (newmask & SLEW_DEC_MINUS)) {
         int cv = lookup_rate (&ctx->opt.d, rate, (newmask & SLEW_DEC_MINUS),
                               false, false);
-        if (motion_set_velocity (ctx->d, cv) < 0)
-            err ("d: set velocity %d", cv);
+        if (motion_move_constant (ctx->d, cv) < 0)
+            err ("d: move at v=%d", cv);
     }
     else {
         if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
-            if (motion_stop (ctx->d) < 0)
+            if (motion_soft_stop (ctx->d) < 0)
                 err ("d: stop");
         }
     }
@@ -362,10 +349,10 @@ void hpad_cb (struct hpad *h, void *arg)
     /* M1 - emergency stop
      */
     if ((ctrl & HPAD_CONTROL_M1)) {
-        if (motion_stop (ctx->t) < 0)
-            err ("t: stop");
-        if (motion_stop (ctx->d) < 0)
-            err ("d: stop");
+        if (motion_abort (ctx->t) < 0)
+            err ("t: motion_abort");
+        if (motion_abort (ctx->d) < 0)
+            err ("d: motion_abort");
         ctx->t_tracking = false;
         ctx->slew = 0;
         return;
@@ -375,7 +362,7 @@ void hpad_cb (struct hpad *h, void *arg)
     if ((ctrl & HPAD_CONTROL_M2)) {
         if (ctx->t_tracking) {
             if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
-                if (motion_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0)
                     err ("t: stop");
             }
             ctx->t_tracking = false;
@@ -384,8 +371,8 @@ void hpad_cb (struct hpad *h, void *arg)
             if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
                 int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
                                       true, ctx->west);
-                if (motion_set_velocity (ctx->t, cv) < 0)
-                    err ("t: set velocity %d", cv);
+                if (motion_move_constant (ctx->t, cv) < 0)
+                    err ("t: move at v=%d", cv);
             }
             ctx->t_tracking = true;
         }
@@ -473,10 +460,41 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
     t = t_degrees/360.0 * ctx->opt.t.steps;
     d = d_degrees/360.0 * ctx->opt.d.steps;
 
-    if (motion_set_position (ctx->t, ctx->west ? t : -1*t) < 0)
+    msg ("t,d: goto begin");
+    if (motion_goto_absolute (ctx->t, ctx->west ? t : -1*t) < 0)
         err ("t: set position");
-    if (motion_set_position (ctx->d, d) < 0)
-        err ("t: set position");
+    if (motion_goto_absolute (ctx->d, d) < 0)
+        err ("d: set position");
+}
+
+/* LX200 protocol wants to stop all motion (abort a goto).
+ */
+void lx200_stop_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+
+    if (motion_soft_stop (ctx->t) < 0)
+        err ("t: soft stop");
+    if (motion_soft_stop (ctx->d) < 0)
+        err ("d: soft stop");
+}
+
+/* Motion axis informs us that goto has completed.
+ * Goto cancels the constant velocity motion of RA tracking,
+ * so resume it here if enabled.
+ * FIXME: need to account for lost tracking for the duration of the goto.
+ */
+void motion_cb (struct motion *m, void *arg)
+{
+    struct prog_context *ctx = arg;
+
+    msg ("%s: goto end", motion_get_name (m));
+    if (ctx->t_tracking && m == ctx->t) {
+        int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
+                              true, ctx->west);
+        if (motion_move_constant (ctx->t, cv) < 0)
+            err ("t: move at v=%d", cv);
+    }
 }
 
 /*

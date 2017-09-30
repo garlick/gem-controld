@@ -22,13 +22,35 @@
  *  See also:  http://www.gnu.org/licenses/
 \*****************************************************************************/
 
-/* motion.c - communicate with Intelligent Motion Devices IM483I indexer */
+/* motion.c - communicate with IMS im483i indexer */
+
+/* N.B. The im483i can only handle one command a time.  It is "busy" if a
+ * command has been sent, but a result has not yet been received.
+ *
+ * Commands are terminated with \r.
+ * Results are terminated with \r\n.
+ *
+ * Communication is assumed to be in single mode, not party line.
+ *
+ * The im483ie (encoder version) should work but no support for encoder
+ * based operations is included.
+ *
+ * The Z1 mode, which causes position updates terminated with \r to be sent
+ * continuously until the next command, is not used here, and is not handled
+ * by the command/result framing code.
+ *
+ * Ref: High Performance Microstepper Driver & Indexer Software Reference
+ * Manual, Intelligent Motion Systems, Inc.
+ * https://motion.schneider-electric.com/downloads/manuals/imx_software.pdf
+ * http://lennon.astro.northwestern.edu/Computers/IMSmanual.html
+ */
 
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <termios.h>
 #include <errno.h>
+#include <stddef.h>
 #include <stdint.h>
 #include <stdbool.h>
 #include <string.h>
@@ -36,19 +58,40 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <math.h>
+#include <ev.h>
 
+#include "log.h"
 #include "motion.h"
+
 
 struct motion {
     int fd;
-    char *devname;
     char *name;
     int flags;
+    ev_io io_w;
+    ev_timer status_poll_w;
+    ev_timer timeout_w;
+    bool timeout;
+    struct ev_loop *main_loop;
+    struct ev_loop *tmp_loop;
+    char inbuf[1024];
+    int inbuf_len;
+    bool busy;
+    motion_cb_f cb;
+    void *cb_arg;
 };
 
-const int max_cmdline = 80;
+static const double status_poll_sec = 0.3;  // poll period during goto
 
-/* Translate funny characters into readable debug output.
+static const double timeout_sec = 5.;   // waiting for result - give up
+static const double warn_sec = 1.;      // waiting for result - warn
+
+static int result_recv (struct motion *m, char *buf, int len);
+static void result_clear (struct motion *m);
+static int serial_send (int fd, const char *s);
+
+
+/* Translate unprintable characters into readable debug output.
  * Caller must free resulting string.
  */
 static char *toliteral (const char *s)
@@ -62,6 +105,8 @@ static char *toliteral (const char *s)
         while (*p) {
             if (*p == '\r')
                 sprintf (buf + strlen (buf), "\\r");
+            else if (*p == '\n')
+                sprintf (buf + strlen (buf), "\\n");
             else if (*p < ' ' || *p > '~')
                 sprintf (buf + strlen (buf), "\\%.3o", *p);
             else
@@ -72,136 +117,195 @@ static char *toliteral (const char *s)
     return buf;
 }
 
-static int dgetc (int fd)
-{
-    uint8_t c;
-    int n = read (fd, &c, 1);
-    if (n == 0)
-        errno = ETIMEDOUT;
-    if (n <= 0)
-        return -1;
-    return c;
-}
-
-/* Read a line ending in \r\n from 'fd' and return it, without the \r\n,
- * using buf[size] as storage.  If there is a read error or buf overflow,
- * return NULL.
+/* If busy, wait for result, then clear result buffer.
+ * Send string to serial port with \r terminator, then set busy flag.
  */
-static char *mgets (struct motion *m, char *buf, int size)
+static int command_send (struct motion *m, const char *s)
 {
-    int c;
-    int i = 0;
-    int term = 0;
+    char buf[80];
 
-    assert (size > 1);
-    memset (buf, 0, size);
-    while (term < 2 && i < size - 2 && (c = dgetc (m->fd)) != -1) {
-        if (c == '\r' || c == '\n')
-            term++;
-        else {
-            term = 0;
-            buf[i++] = c;
-        }
+    if (m->busy) {
+        if (result_recv (m, NULL, 0) < 0)
+            return -1;
     }
-    if (term != 2)
-        return NULL;
-    buf[i] = '\0';
+    result_clear (m);
+
+    if (snprintf (buf, sizeof (buf), "%s\r", s) >= sizeof (buf)) {
+        errno = EINVAL;
+        return -1;
+    }
     if (m->flags & MOTION_DEBUG) {
         char *cpy = toliteral (buf);
-        fprintf (stderr, "%s<'%s'\n", m->name, cpy);
-        free (cpy);
-    }
-    return buf;
-}
-
-static int mputs (struct motion *m, const char *s)
-{
-    if (m->flags & MOTION_DEBUG) {
-        char *cpy = toliteral (s);
         fprintf (stderr, "%s>'%s'\n", m->name, cpy);
         free (cpy);
     }
-    return dprintf (m->fd, "%s", s);
+    if (serial_send (m->fd, buf) < 0)
+        return -1;
+
+    m->busy = true;
+
+    return 0;
 }
 
-static int mprintf (struct motion *m, const char *fmt, ...)
+/* printf-style wrapper for command_send().
+ */
+static int command_sendf (struct motion *m, const char *fmt, ...)
 {
     va_list ap;
     char *s = NULL;
     int rc;
 
     va_start (ap, fmt);
-    if (vasprintf (&s, fmt, ap) < 0)
-        return -1;
+    rc = vasprintf (&s, fmt, ap);
     va_end (ap);
-    rc = mputs (m, s);
+    if (rc < 0)
+        goto done;
+    rc = command_send (m, s);
+done:
     free (s);
     return rc;
 }
 
-/* Send a \r, receive a #.
- */
-static int mping (struct motion *m, int count)
+/* helper for result_clear() and result_recv() */
+static int result_consume (struct motion *m, char *buf, int len)
 {
-    int i;
-    char buf[max_cmdline];
-    int rc = -1;
+    char *p;
+    int used;
 
-    for (i = 0; i < count; i++) {
-        if (mputs (m, "\r") < 0 || !mgets (m, buf, sizeof (buf)))
-            goto done;
-        if (strcmp (buf, "#") != 0) {
-            errno = EPROTO;
-            goto done;
+    if (!(p = strstr (m->inbuf, "\r\n")))
+        return -1;
+    assert (p != NULL);
+    *p = '\0';
+
+    if ((m->flags & MOTION_DEBUG)) {
+        char *cpy = toliteral (m->inbuf);
+        fprintf (stderr, "%s<'%s\\r\\n'\n", m->name, cpy);
+        free (cpy);
+    }
+
+    if (buf)
+        snprintf (buf, len, "%s", m->inbuf);
+
+    used = strlen (m->inbuf) + 2;
+    memmove (m->inbuf, m->inbuf + used, m->inbuf_len - used);
+    m->inbuf_len -= used;
+    m->inbuf[m->inbuf_len] = '\0';
+    m->busy = false;
+    return 0;
+}
+
+/* Clear the result buffer.
+ */
+static void result_clear (struct motion *m)
+{
+    while (result_consume (m, NULL, 0) == 0)
+        ;
+}
+
+static void timeout_cb (struct ev_loop *loop, ev_timer *w, int revents)
+{
+    struct motion *m = (struct motion *)((char *)w
+                        - offsetof (struct motion, timeout_w));
+
+    ev_break (loop, EVBREAK_ALL);
+    m->timeout = true;
+}
+
+/* Block until one or more results are received and stored in the inbuf,
+ * then unwrap one and return it in 'buf' without the \r\n termination.
+ */
+static int result_recv (struct motion *m, char *buf, int len)
+{
+    double t0, wait_time = 0.;
+
+    if (!strstr (m->inbuf, "\r\n")) {
+        /* move io watcher to temporary loop */
+        if (m->main_loop)
+            ev_io_stop (m->main_loop, &m->io_w);
+        ev_io_start (m->tmp_loop, &m->io_w);
+
+        m->timeout = false;
+        t0 = ev_now (m->tmp_loop);
+        ev_timer_set (&m->timeout_w, timeout_sec, 0.);
+        ev_timer_start (m->tmp_loop, &m->timeout_w);
+        while (!strstr (m->inbuf, "\r\n")) {
+            if (ev_run (m->tmp_loop, EVRUN_ONCE) < 0 || m->timeout)
+                break;
+        }
+        ev_timer_stop (m->tmp_loop, &m->timeout_w);
+        wait_time = ev_now (m->tmp_loop) - t0;
+
+        /* move io watcher back to main loop */
+        ev_io_stop (m->tmp_loop, &m->io_w);
+        if (m->main_loop)
+            ev_io_start (m->main_loop, &m->io_w);
+    }
+    if (result_consume (m, buf, len) < 0) {
+        if (m->timeout)
+            errno = ETIMEDOUT;
+        else
+            errno = EIO;
+        return -1;
+    }
+    if (wait_time > warn_sec)
+        msg ("%s: waited %.1lfs for result '%s'", m->name, wait_time, buf);
+    return 0;
+}
+
+/* Handle EV_READ event on im483i serial port.
+ */
+static void serial_cb (struct ev_loop *loop, ev_io *w, int revents)
+{
+    struct motion *m = (struct motion *)((char *)w
+                        - offsetof (struct motion, io_w));
+    int n;
+
+    if ((revents & EV_READ)) {
+        do {
+            n = read (m->fd, m->inbuf + m->inbuf_len,
+                      sizeof (m->inbuf) - m->inbuf_len - 1);
+            if (n > 0) {
+                m->inbuf_len += n;
+                m->inbuf[m->inbuf_len] = '\0';
+            }
+            else if (n < 0) {
+                if (errno != EWOULDBLOCK && errno != EAGAIN)
+                    err ("%s: read", m->name);
+            }
+        } while (n > 0);
+    }
+}
+
+/* Send string to im483i serial port in its entirety.
+ */
+static int serial_send (int fd, const char *s)
+{
+    int len = strlen (s);
+    int sent = 0;
+    int n;
+
+    while (sent < len) {
+        n = write (fd, s + sent, len - sent);
+        if (n > 0) {
+            sent += n;
+        }
+        else if (n < 0) {
+            if (errno != EWOULDBLOCK && errno != EAGAIN)
+                return -1;
         }
     }
-    rc = 0;
-done:
-    return rc;
+    return sent;
 }
 
-static void mdelay (struct motion *m, int msec)
-{
-    if (m->flags & MOTION_DEBUG)
-        fprintf (stderr, "%s:delay %dms\n", m->name, msec);
-    usleep (1000*msec);
-}
-
-/* Send command + \r, receive back echoed command.
+/* Open/configure the serial port for non-blocking I/O,
+ * hardwiring parameters needed for the im483i.
  */
-static int mcmd (struct motion *m, const char *fmt, ...)
-{
-    va_list ap;
-    int rc = -1;
-    char *cmd = NULL;
-    char buf[max_cmdline];
-
-    va_start (ap, fmt);
-    if (vasprintf (&cmd, fmt, ap) < 0)
-        return -1;
-    va_end (ap);
-    if (mprintf (m, "%s\r", cmd) < 0)
-        goto done;
-    if (!mgets (m, buf, sizeof (buf)))
-        goto done;
-    if (strcmp (buf, cmd) != 0) {
-        errno = EPROTO;
-        goto done;
-    }
-    rc = 0;
-done:
-    if (cmd)
-        free (cmd);
-    return rc;
-}
-
-/* Open/configure the serial port
- */
-static int mopen (struct motion *m)
+static int serial_open (const char *devname)
 {
     struct termios tio;
+    int fd;
 
-    if ((m->fd = open(m->devname, O_RDWR | O_NOCTTY)) < 0)
+    if ((fd = open (devname, O_RDWR | O_NOCTTY | O_NONBLOCK)) < 0)
         return -1;
     memset (&tio, 0, sizeof (tio));
     tio.c_cflag = B9600 | CS8 | CLOCAL | CREAD;
@@ -209,260 +313,304 @@ static int mopen (struct motion *m)
     tio.c_oflag = 0;
     tio.c_lflag = 0;
     tio.c_cc[VTIME] = 0; /* no timeout */
-    tio.c_cc[VMIN] = 1;  /* block until 1 char available */
-    tcflush (m->fd, TCIFLUSH);
-    return tcsetattr(m->fd, TCSANOW, &tio);
-}
-
-/* Cold start: send " \r", read 2 banner lines and "#".
- * Warm start: send " \r", read " #".
- */
-static int mhello (struct motion *m, bool *coldstart)
-{
-    char buf[max_cmdline];
-    int i;
-    bool warm = false;
-
-    if (mputs (m, " \r") < 0)
+    tio.c_cc[VMIN] = 1;  /* not ready unless at least one character */
+    tcflush (fd, TCIFLUSH);
+    if (tcsetattr(fd, TCSANOW, &tio) < 0) {
+        close (fd);
         return -1;
-    for (i = 0; i < 3; i++) {
-        if (!mgets (m, buf, sizeof (buf)))
-            return -1;
-        if (!strcmp (buf, " #")) {
-            warm = true;
-            break;
-        }
     }
-    if (coldstart)
-        *coldstart = !warm;
-    return 0;
+    return fd;
 }
 
-/* Send ctrl-C to reset device, then delay while it comes out of reset.
+/* ^C - software reset
+ * Returns im483i to power-up state.
  */
-static int mreset (struct motion *m)
+static int motion_reset (struct motion *m)
 {
-    if (mputs (m, "\003") < 0)
-        return -1;
-    mdelay (m, 200);
-    return 0;
-}
+    char buf[80];
 
-/* Examine configuration parameters (via debug output).
- * Assume two lines are returned (three if encoder option installed).
- */
-static int mexamine (struct motion *m)
-{
-    char buf[max_cmdline];
-    int i;
-
-    if (mprintf (m, "X\r") < 0)
-        return -1;
-    for (i = 0; i < 2; i++) {
-        if (!mgets (m, buf, sizeof (buf)))
-            return -1;
-    }
-    return 0;
-}
-
-struct motion *motion_init (const char *devname, const char *name, int flags,
-                            bool *coldstart)
-{
-    struct motion *m;
-    int saved_errno;
-
-    if (!(m = malloc (sizeof (*m))) || !(m->devname = strdup (devname))
-                                    || !(m->name = strdup (name))) {
-        errno = ENOMEM;
-        goto error;
-    }
-    m->flags = flags;
-    m->fd = -1;
-    if (mopen (m) < 0)
-        goto error;
-    if (m->flags & MOTION_RESET) {
-        if (mreset (m) < 0)
-            goto error;
-    }
-    if (mhello (m, coldstart) < 0)
-        goto error;
     if (m->flags & MOTION_DEBUG) {
-        if (mexamine (m) < 0)
-            goto error;
+        fprintf (stderr, "%s>'\\003' + 200ms delay\n", m->name);
     }
-    if (mping (m, 2) < 0)
-        goto error;
-    return m;
-error:
-    saved_errno = errno;
-    motion_fini (m);
-    errno = saved_errno;
-    return NULL;
-}
-
-void motion_fini (struct motion *m)
-{
-    if (m) {
-        if (m->fd >= 0) {
-            (void)mcmd (m, "M0");
-            (void)close (m->fd);
-        }
-        if (m->devname)
-            free (m->devname);
-        if (m->name)
-            free (m->name);
-        free (m);
-    }
-}
-
-const char *motion_name (struct motion *m)
-{
-    return m->name;
-}
-
-int motion_set_resolution (struct motion *m, int res)
-{
-    if (res < 0 || res > 8) {
-        errno = EINVAL;
+    if (serial_send (m->fd, "\003") < 0)
         return -1;
-    }
-    return mcmd (m, "D%d", res);
-}
+    usleep (1000*200);                // wait for hardware
 
-int motion_set_mode (struct motion *m, int mode)
-{
-    if (mode != 0 && mode != 1) {
-        errno = EINVAL;
+    m->busy = false;
+    m->inbuf[0] = '\0';
+    m->inbuf_len = 0;
+
+    if (command_send (m, " ") < 0)
         return -1;
+    for (;;) {
+        if (result_recv (m, buf, sizeof (buf)) < 0)
+            return -1;
+        if (!strcmp (buf, "#"))
+            break;
     }
-    return mcmd (m, "H%d", mode);
+    return 0;
 }
 
-int motion_set_current (struct motion *m, int hold, int run)
-{
-    if (hold < 0 || hold > 100 || run < 0 || run > 100) {
-        errno = EINVAL;
-        return -1;
-    }
-    return mcmd (m, "Y%d %d", hold, run);
-}
-
-int motion_set_acceleration (struct motion *m, int accel, int decel)
-{
-    if (accel < 0 || accel > 255 || decel < 0 || decel > 255) {
-        errno = EINVAL;
-        return -1;
-    }
-    return mcmd (m, "K%d %d", accel, decel);
-}
-
-int motion_set_initial_velocity (struct motion *m, int velocity)
-{
-    if (velocity < 20  || velocity > 20000) {
-        errno = EINVAL;
-        return -1;
-    }
-    return mcmd (m, "I%d", velocity);
-}
-
-int motion_set_final_velocity (struct motion *m, int velocity)
-{
-    if (velocity < 20  || velocity > 20000) {
-        errno = EINVAL;
-        return -1;
-    }
-    return mcmd (m, "V%d", velocity);
-}
-
-int motion_set_velocity (struct motion *m, int velocity)
+/* M - move at fixed velocity
+ * Motion may be terminated by @-soft stop, M0-velocity zero, or ESC-abort.
+ * N.B. motion does not resume automatically after an index command.
+ */
+int motion_move_constant (struct motion *m, int velocity)
 {
     if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {
         errno = EINVAL;
         return -1;
     }
-    return mcmd (m, "M%d", velocity);
+    return command_sendf (m, "M%d", velocity);
 }
 
+/* Z - read position (non encoder).
+ */
 int motion_get_position (struct motion *m, double *position)
 {
-    char buf[max_cmdline];
+    char buf[80];
     float pos;
 
-    if (mprintf (m, "Z0\r") < 0)
+    if (command_sendf (m, "Z0") < 0)
         return -1;
-    if (!mgets (m, buf, sizeof (buf)))
+    if (result_recv (m, buf, sizeof (buf)) < 0)
         return -1;
-    if (sscanf (buf, "Z0 %f", &pos) != 1)
+    if (sscanf (buf, "Z0 %f", &pos) != 1) {
+        errno = EPROTO;
         return -1;
+    }
     *position = (double)pos;
     return 0;
 }
 
-int motion_set_position (struct motion *m, double position)
+/* ^ - read moving status
+ */
+int motion_get_status (struct motion *m, int *status)
+{
+    char buf[80];
+    int s;
+
+    if (command_sendf (m, "^") < 0)
+        return -1;
+    if (result_recv (m, buf, sizeof (buf)) < 0)
+        return -1;
+    if (sscanf (buf, "^ %d", &s) != 1) {
+        errno = EPROTO;
+        return -1;
+    }
+    *status = s;
+    return 0;
+}
+
+/* R - relative index
+ */
+int motion_goto_absolute (struct motion *m, double position)
 {
     if (fabs (position) > 8388607.9) {
         errno = EINVAL;
         return -1;
     }
-    return mcmd (m, "R%+.2f", position);
-}
-
-int motion_get_status (struct motion *m, uint8_t *status)
-{
-    char buf[max_cmdline];
-    int s;
-
-    if (mprintf (m, "^\r") < 0)
+    if (command_sendf (m, "R%+.2f", position) < 0)
         return -1;
-    if (!mgets (m, buf, sizeof (buf)))
-        return -1;
-    if (sscanf (buf, "^ %d", &s) != 1)
-        return -1;
-    *status  = s;
+    ev_timer_set (&m->status_poll_w, status_poll_sec, status_poll_sec);
+    ev_timer_start (m->main_loop, &m->status_poll_w);
     return 0;
 }
 
-int motion_set_index (struct motion *m, double offset)
+/* +/- - index
+ */
+int motion_goto_relative (struct motion *m, double offset)
 {
     if (fabs (offset) < 0.01 || fabs (offset) > 8388607.99) {
         errno = EINVAL;
         return -1;
     }
-    return mcmd (m, "%+.2f", offset);
+    if (command_sendf (m, "%+.2f", offset) < 0)
+        return -1;
+    ev_timer_set (&m->status_poll_w, status_poll_sec, status_poll_sec);
+    ev_timer_start (m->main_loop, &m->status_poll_w);
+    return 0;
 }
 
+/* O - set origin
+ */
 int motion_set_origin (struct motion *m)
 {
-    return mcmd (m, "O");
+    return command_send (m, "O");
 }
 
-int motion_stop (struct motion *m)
+/* @ - soft stop
+ */
+int motion_soft_stop (struct motion *m)
 {
-    return mcmd (m, "@");
+    return command_send (m, "@");
 }
 
-int motion_set_port (struct motion *m, uint8_t val)
+/* ESC - abort
+ */
+int motion_abort (struct motion *m)
 {
-    if (val & 0b11000111) {
-        errno = EINVAL;
+    m->busy = false; // don't wait for command result
+    return command_send (m, "\033");
+}
+
+/* A - port write
+ */
+int motion_set_io (struct motion *m, uint8_t val)
+{
+    return command_sendf (m, "A%d", val);
+}
+
+/* A - port read
+ */
+int motion_get_io (struct motion *m, uint8_t *val)
+{
+    char buf[80];
+    int value;
+
+    if (command_send (m, "A129") < 0)
+        return -1;
+    if (result_recv (m, buf, sizeof (buf)) < 0)
+        return -1;
+    if (sscanf (buf, "A129 %d", &value) != 1) {
+        errno = EPROTO;
         return -1;
     }
-    return mcmd (m, "A%d", val);
+    *val = (uint8_t)value;
+    return 0;
 }
 
-int motion_get_port (struct motion *m, uint8_t *val)
+/* Poll for moving status change during a goto.
+ * FIXME: estimate of time needed for goto could reduce polling overhead.
+ */
+static void status_poll_cb (struct ev_loop *loop, ev_timer *w, int revents)
 {
-    char buf[max_cmdline];
-    int v;
+    struct motion *m = (struct motion *)((char *)w
+                        - offsetof (struct motion, status_poll_w));
+    int status;
 
-    if (mprintf (m, "A129\r") < 0)
-        return -1;
-    if (!mgets (m, buf, sizeof (buf)))
-        return -1;
-    if (sscanf (buf, "A129 %d", &v) != 1)
-        return -1;
-    *val = v;
+    if (motion_get_status (m, &status) < 0) {
+        err ("motion_get_status");
+        return;
+    }
+    if (!(status & MOTION_STATUS_MOVING)) {
+        ev_timer_stop (loop, w);
+        if (m->cb)
+            m->cb (m, m->cb_arg);
+    }
+}
+
+static int motion_configure (struct motion *m, struct motion_config *cfg)
+{
+    if (cfg->resolution < 0 || cfg->resolution > 8)
+        goto inval;
+    if (command_sendf (m, "D%d", cfg->resolution) < 0)
+        goto error;
+    if (cfg->mode != 0 && cfg->mode != 1)
+        goto inval;
+    if (command_sendf (m, "H%d", cfg->mode) < 0)
+        goto error;
+    if (cfg->ihold < 0 || cfg->ihold > 100
+                    || cfg->irun < 0 || cfg->irun > 100)
+        goto inval;
+    if (command_sendf (m, "Y%d %d", cfg->ihold, cfg->irun) < 0)
+        goto error;
+    if (cfg->accel < 0 || cfg->accel > 255
+                    || cfg->decel < 0 || cfg->decel > 255)
+        goto inval;
+    if (command_sendf (m, "K%d %d", cfg->accel, cfg->decel) < 0)
+        goto error;
+    if (cfg->initv < 20  || cfg->initv > 20000)
+        goto inval;
+    if (command_sendf (m, "I%d", cfg->initv) < 0)
+        goto error;
+    if (cfg->finalv < 20  || cfg->finalv > 20000)
+        goto inval;
+    if (command_sendf (m, "V%d", cfg->finalv) < 0)
+        goto error;
     return 0;
+inval:
+    errno = EINVAL;
+error:
+    return -1;
+}
+
+int motion_init (struct motion *m, const char *devname,
+                 struct motion_config *cfg, int flags)
+{
+    if ((m->fd = serial_open (devname)) < 0)
+        goto error;
+    ev_io_init (&m->io_w, serial_cb, m->fd, EV_READ);
+    ev_timer_init (&m->status_poll_w, status_poll_cb, 0., 0.);
+    ev_timer_init (&m->timeout_w, timeout_cb, 0., 0.);
+    m->flags = flags;
+    if (motion_reset (m) < 0)
+        goto error;
+    if (cfg) {
+        if (motion_configure (m, cfg) < 0)
+            goto error;
+    }
+    return 0;
+error:
+    if (m->fd >= 0) {
+        int saved_errno = errno;
+        (void)close (m->fd);
+        m->fd = -1;
+        errno = saved_errno;
+    }
+    return -1;
+}
+
+void motion_start (struct ev_loop *loop, struct motion *m)
+{
+    ev_io_start (loop, &m->io_w);
+    m->main_loop = loop;
+}
+
+void motion_stop (struct ev_loop *loop, struct motion *m)
+{
+    ev_io_stop (loop, &m->io_w);
+    ev_timer_stop (loop, &m->status_poll_w);
+    m->main_loop = NULL;
+}
+
+const char *motion_get_name (struct motion *m)
+{
+    return m->name;
+}
+
+void motion_set_cb (struct motion *m, motion_cb_f cb, void *arg)
+{
+    m->cb = cb;
+    m->cb_arg = arg;
+}
+
+void motion_destroy (struct motion *m)
+{
+    if (m) {
+        if (m->tmp_loop)
+            ev_loop_destroy (m->tmp_loop);
+        if (m->fd >= 0)
+            (void)close (m->fd);
+        free (m->name);
+        free (m);
+    }
+}
+
+struct motion *motion_new (const char *name)
+{
+    struct motion *m;
+    if (!(m = calloc (1, sizeof (*m))))
+        goto error;
+    m->fd = -1;
+    if (!(m->name = strdup (name)))
+        goto error;
+    if (!(m->tmp_loop = ev_loop_new (EVFLAG_AUTO)))
+        goto error;
+    return m;
+error:
+    motion_destroy (m);
+    return NULL;
 }
 
 /*
