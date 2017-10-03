@@ -319,8 +319,11 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
                     err ("t: move at v=%d", cv);
             }
             else {
-                if (motion_soft_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0) {
                     err ("t: stop");
+                    if (motion_abort (ctx->t) < 0)
+                        err ("t: abort");
+                }
             }
         }
     }
@@ -332,8 +335,11 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     }
     else {
         if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
-            if (motion_soft_stop (ctx->d) < 0)
+            if (motion_soft_stop (ctx->d) < 0) {
                 err ("d: stop");
+                if (motion_abort (ctx->d) < 0)
+                    err ("d: abort");
+            }
         }
     }
     ctx->slew = newmask;
@@ -349,10 +355,16 @@ void hpad_cb (struct hpad *h, void *arg)
     /* M1 - emergency stop
      */
     if ((ctrl & HPAD_CONTROL_M1)) {
-        if (motion_abort (ctx->t) < 0)
+        if (motion_abort (ctx->t) < 0) {
             err ("t: motion_abort");
-        if (motion_abort (ctx->d) < 0)
+            if (motion_abort (ctx->t) < 0) // one retry
+                err ("t: motion_abort");
+        }
+        if (motion_abort (ctx->d) < 0) {
             err ("d: motion_abort");
+            if (motion_abort (ctx->d) < 0) // one retry
+                err ("t: motion_abort");
+        }
         ctx->t_tracking = false;
         ctx->slew = 0;
         return;
@@ -473,10 +485,16 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
 
-    if (motion_soft_stop (ctx->t) < 0)
+    if (motion_soft_stop (ctx->t) < 0) {
         err ("t: soft stop");
-    if (motion_soft_stop (ctx->d) < 0)
+        if (motion_abort (ctx->t) < 0)
+            err ("t: abort");
+    }
+    if (motion_soft_stop (ctx->d) < 0) {
         err ("d: soft stop");
+        if (motion_abort (ctx->d) < 0)
+            err ("t: abort");
+    }
 }
 
 /* Motion axis informs us that goto has completed.
