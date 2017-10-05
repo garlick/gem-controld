@@ -79,6 +79,7 @@ struct motion {
     bool busy;
     motion_cb_f cb;
     void *cb_arg;
+    struct motion_config cfg;
 };
 
 static const double status_poll_sec = 0.3;  // poll period during goto
@@ -355,13 +356,15 @@ static int motion_reset (struct motion *m)
  * Motion may be terminated by @-soft stop, M0-velocity zero, or ESC-abort.
  * N.B. motion does not resume automatically after an index command.
  */
-int motion_move_constant (struct motion *m, int velocity)
+int motion_move_constant (struct motion *m, int sps)
 {
-    if (velocity != 0 && (abs (velocity) < 20  || abs (velocity) > 20000)) {
+    if (m->cfg.ccw)
+        sps *= -1;
+    if (sps != 0 && (abs (sps) < 20  || abs (sps) > 20000)) {
         errno = EINVAL;
         return -1;
     }
-    return command_sendf (m, "M%d", velocity);
+    return command_sendf (m, "M%d", sps);
 }
 
 /* Z - read position (non encoder).
@@ -379,7 +382,7 @@ int motion_get_position (struct motion *m, double *position)
         errno = EPROTO;
         return -1;
     }
-    *position = (double)pos;
+    *position = (double)pos * (m->cfg.ccw ? -1 : 1);
     return 0;
 }
 
@@ -406,6 +409,8 @@ int motion_get_status (struct motion *m, int *status)
  */
 int motion_goto_absolute (struct motion *m, double position)
 {
+    if (m->cfg.ccw)
+        position *= -1;
     if (fabs (position) > 8388607.9) {
         errno = EINVAL;
         return -1;
@@ -421,6 +426,8 @@ int motion_goto_absolute (struct motion *m, double position)
  */
 int motion_goto_relative (struct motion *m, double offset)
 {
+    if (m->cfg.ccw)
+        offset *= -1;
     if (fabs (offset) < 0.01 || fabs (offset) > 8388607.99) {
         errno = EINVAL;
         return -1;
@@ -500,6 +507,19 @@ static void status_poll_cb (struct ev_loop *loop, ev_timer *w, int revents)
     }
 }
 
+/* Calculate velocity in steps/sec for motion controller from degrees/sec.
+ * Take into account controller velocity scaling in 'auto' mode.
+ * Then move at that velocity.
+ */
+int motion_move_constant_dps (struct motion *m, double dps)
+{
+    double sps = dps * m->cfg.steps / 360.;
+
+    if (m->cfg.mode == 1) // fixed=0, auto=1
+        sps *= 1<<(m->cfg.resolution);
+    return motion_move_constant (m, lrint (sps));
+};
+
 static int motion_configure (struct motion *m, struct motion_config *cfg)
 {
     if (cfg->resolution < 0 || cfg->resolution > 8)
@@ -528,6 +548,9 @@ static int motion_configure (struct motion *m, struct motion_config *cfg)
         goto inval;
     if (command_sendf (m, "V%d", cfg->finalv) < 0)
         goto error;
+    if (cfg->steps < 300 || cfg->steps > 8388607)
+        goto inval;
+    m->cfg = *cfg;
     return 0;
 inval:
     errno = EINVAL;
