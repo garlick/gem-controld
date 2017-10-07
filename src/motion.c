@@ -66,6 +66,9 @@
 #define MAX_CMD     80
 #define MAX_BUF     1024
 
+enum {
+    SEND_EXPECT_ECHO = 1,
+};
 
 struct motion {
     int fd;
@@ -124,7 +127,7 @@ static char *toliteral (const char *s)
 /* If busy, wait for result, then clear result buffer.
  * Send string to serial port with \r terminator, then set busy flag.
  */
-static int command_send (struct motion *m, const char *s)
+static int command_send (struct motion *m, int flags, const char *s)
 {
     char buf[MAX_CMD];
 
@@ -148,12 +151,22 @@ static int command_send (struct motion *m, const char *s)
 
     m->busy = true;
 
+    if ((flags & SEND_EXPECT_ECHO)) {
+        char result[MAX_CMD];
+        if (result_recv (m, result, sizeof (result)) < 0)
+            return -1;
+        if (strncmp (buf, result, strlen (result)) != 0) { // ignore \r in buf
+            errno = EPROTO;
+            return -1;
+        }
+    }
+
     return 0;
 }
 
 /* printf-style wrapper for command_send().
  */
-static int command_sendf (struct motion *m, const char *fmt, ...)
+static int command_sendf (struct motion *m, bool flags, const char *fmt, ...)
 {
     va_list ap;
     char *s = NULL;
@@ -164,7 +177,7 @@ static int command_sendf (struct motion *m, const char *fmt, ...)
     va_end (ap);
     if (rc < 0)
         goto done;
-    rc = command_send (m, s);
+    rc = command_send (m, flags, s);
 done:
     free (s);
     return rc;
@@ -343,7 +356,7 @@ static int motion_reset (struct motion *m)
     m->inbuf[0] = '\0';
     m->inbuf_len = 0;
 
-    if (command_send (m, " ") < 0)
+    if (command_send (m, 0, " ") < 0)
         return -1;
     for (;;) {
         if (result_recv (m, buf, sizeof (buf)) < 0)
@@ -366,7 +379,7 @@ int motion_move_constant (struct motion *m, int sps)
         errno = EINVAL;
         return -1;
     }
-    return command_sendf (m, "M%d", sps);
+    return command_sendf (m, SEND_EXPECT_ECHO, "M%d", sps);
 }
 
 /* Z - read position (non encoder).
@@ -376,7 +389,7 @@ int motion_get_position (struct motion *m, double *position)
     char buf[MAX_CMD];
     double pos;
 
-    if (command_sendf (m, "Z0") < 0)
+    if (command_sendf (m, 0, "Z0") < 0)
         return -1;
     if (result_recv (m, buf, sizeof (buf)) < 0)
         return -1;
@@ -395,7 +408,7 @@ int motion_get_status (struct motion *m, int *status)
     char buf[MAX_CMD];
     int s;
 
-    if (command_sendf (m, "^") < 0)
+    if (command_sendf (m, 0, "^") < 0)
         return -1;
     if (result_recv (m, buf, sizeof (buf)) < 0)
         return -1;
@@ -417,7 +430,7 @@ int motion_goto_absolute (struct motion *m, double position)
         errno = EINVAL;
         return -1;
     }
-    if (command_sendf (m, "R%+.2f", position) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "R%+.2f", position) < 0)
         return -1;
     ev_timer_set (&m->status_poll_w, status_poll_sec, status_poll_sec);
     ev_timer_start (m->main_loop, &m->status_poll_w);
@@ -434,7 +447,7 @@ int motion_goto_relative (struct motion *m, double offset)
         errno = EINVAL;
         return -1;
     }
-    if (command_sendf (m, "%+.2f", offset) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "%+.2f", offset) < 0)
         return -1;
     ev_timer_set (&m->status_poll_w, status_poll_sec, status_poll_sec);
     ev_timer_start (m->main_loop, &m->status_poll_w);
@@ -445,14 +458,14 @@ int motion_goto_relative (struct motion *m, double offset)
  */
 int motion_set_origin (struct motion *m)
 {
-    return command_send (m, "O");
+    return command_send (m, SEND_EXPECT_ECHO, "O");
 }
 
 /* @ - soft stop
  */
 int motion_soft_stop (struct motion *m)
 {
-    return command_send (m, "@");
+    return command_send (m, SEND_EXPECT_ECHO, "@");
 }
 
 /* ESC - abort
@@ -462,7 +475,7 @@ int motion_abort (struct motion *m)
     char buf[MAX_CMD];
 
     m->busy = false; // don't wait for previous command result
-    if (command_send (m, "\033") < 0)
+    if (command_send (m, 0, "\033") < 0)
         return -1;
     do {
         if (result_recv (m, buf, sizeof (buf)) < 0)
@@ -475,7 +488,7 @@ int motion_abort (struct motion *m)
  */
 int motion_set_io (struct motion *m, uint8_t val)
 {
-    return command_sendf (m, "A%d", val);
+    return command_sendf (m, SEND_EXPECT_ECHO, "A%d", val);
 }
 
 /* A - port read
@@ -485,7 +498,7 @@ int motion_get_io (struct motion *m, uint8_t *val)
     char buf[MAX_CMD];
     int value;
 
-    if (command_send (m, "A129") < 0)
+    if (command_send (m, 0, "A129") < 0)
         return -1;
     if (result_recv (m, buf, sizeof (buf)) < 0)
         return -1;
@@ -534,29 +547,31 @@ static int motion_configure (struct motion *m, struct motion_config *cfg)
 {
     if (cfg->resolution < 0 || cfg->resolution > 8)
         goto inval;
-    if (command_sendf (m, "D%d", cfg->resolution) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "D%d", cfg->resolution) < 0)
         goto error;
     if (cfg->mode != 0 && cfg->mode != 1)
         goto inval;
-    if (command_sendf (m, "H%d", cfg->mode) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "H%d", cfg->mode) < 0)
         goto error;
     if (cfg->ihold < 0 || cfg->ihold > 100
                     || cfg->irun < 0 || cfg->irun > 100)
         goto inval;
-    if (command_sendf (m, "Y%d %d", cfg->ihold, cfg->irun) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "Y%d %d",
+                                                cfg->ihold, cfg->irun) < 0)
         goto error;
     if (cfg->accel < 0 || cfg->accel > 255
                     || cfg->decel < 0 || cfg->decel > 255)
         goto inval;
-    if (command_sendf (m, "K%d %d", cfg->accel, cfg->decel) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "K%d %d",
+                                                cfg->accel, cfg->decel) < 0)
         goto error;
     if (cfg->initv < 20  || cfg->initv > 20000)
         goto inval;
-    if (command_sendf (m, "I%d", cfg->initv) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "I%d", cfg->initv) < 0)
         goto error;
     if (cfg->finalv < 20  || cfg->finalv > 20000)
         goto inval;
-    if (command_sendf (m, "V%d", cfg->finalv) < 0)
+    if (command_sendf (m, SEND_EXPECT_ECHO, "V%d", cfg->finalv) < 0)
         goto error;
     if (cfg->steps < 300 || cfg->steps > 8388607)
         goto inval;
