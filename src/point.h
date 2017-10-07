@@ -24,6 +24,7 @@ struct point;
 
 enum {
     POINT_DEBUG = 1,
+    POINT_WEST = 2,     // set initial point to western horizon, not eastern
 };
 
 struct point *point_new (void);

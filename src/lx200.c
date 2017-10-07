@@ -486,6 +486,7 @@ void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 int lx200_init (struct lx200 *lx, int port, int flags)
 {
     struct sockaddr_in addr;
+    int point_flags = 0;
 
     lx->flags = flags;
 
@@ -507,7 +508,10 @@ int lx200_init (struct lx200 *lx, int port, int flags)
         msg ("listening on port %d", port);
 
     if ((lx->flags & LX200_DEBUG))
-        point_set_flags (lx->point, POINT_DEBUG);
+        point_flags |= POINT_DEBUG;
+    if ((lx->flags & LX200_POINT_WEST))
+        point_flags |= POINT_WEST;
+    point_set_flags (lx->point, point_flags);
 
     return 0;
 }

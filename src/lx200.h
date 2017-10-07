@@ -5,6 +5,7 @@
 
 enum {
     LX200_DEBUG = 1,
+    LX200_POINT_WEST = 2,
 };
 
 struct lx200;

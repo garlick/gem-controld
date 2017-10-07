@@ -143,6 +143,7 @@ int main (int argc, char *argv[])
                 break;
             case 'w':   /* --west */
                 ctx.west = true;
+                lx200_flags |= LX200_POINT_WEST; // hint for unaligned starting
                 break;
             case 'h':   /* --help */
             default:

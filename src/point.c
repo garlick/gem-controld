@@ -186,6 +186,11 @@ void point_get_position_dec (struct point *p, int *deg, int *min, double *sec)
 void point_set_flags (struct point *p, int flags)
 {
     p->flags = flags;
+
+    if ((p->flags & POINT_WEST))
+        p->zpc.ra = 90.;    // W horizon (until sync)
+    else
+        p->zpc.ra = -90.;   // E horizon (until sync)
 }
 
 struct point *point_new (void)
