@@ -235,7 +235,7 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d:%d.%d#", &hr, &min, &tenths) == 2) {
-            point_set_target_dec (c->lx->point, hr, min, 6*tenths);
+            point_set_target_ra (c->lx->point, hr, min, 6*tenths);
             rc = write_all (c, "1", 1);
         }
         else
