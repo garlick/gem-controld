@@ -273,7 +273,7 @@ double lookup_rate (struct config_axis *axis, int rate,
     if (neg)
         dps *= -1.;
     if (track)
-        dps -= axis->sidereal;
+        dps += axis->sidereal;
     return dps;
 }
 
