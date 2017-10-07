@@ -62,7 +62,8 @@ struct prog_context {
     bool west;
 };
 
-struct motion *init_axis (struct config_axis *a, const char *name, int flags);
+struct motion *init_axis (struct config_axis *a, const char *name, int flags,
+                          bool ccw);
 
 void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
@@ -158,11 +159,11 @@ int main (int argc, char *argv[])
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags);
+    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags, true);
     motion_set_cb (ctx.t, motion_cb, &ctx);
     motion_start (ctx.loop, ctx.t);
 
-    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags);
+    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags, ctx.west ? true : false);
     motion_set_cb (ctx.d, motion_cb, &ctx);
     motion_start (ctx.loop, ctx.d);
 
@@ -214,7 +215,8 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-struct motion *init_axis (struct config_axis *a, const char *name, int flags)
+struct motion *init_axis (struct config_axis *a, const char *name, int flags,
+                          bool ccw)
 {
     struct motion_config cfg = {
         .resolution = a->resolution,
@@ -225,6 +227,8 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
         .decel      = a->decel,
         .initv      = a->initv,
         .finalv     = a->finalv,
+        .steps      = a->steps,
+        .ccw        = ccw,
     };
     struct motion *m;
 
@@ -240,53 +244,37 @@ struct motion *init_axis (struct config_axis *a, const char *name, int flags)
     return m;
 }
 
-/* Calculate velocity in steps/sec for motion controller from degrees/sec.
- * Take into account controller velocity scaling in 'auto' mode.
- */
-int controller_velocity (struct config_axis *axis, double degrees_persec)
-{
-    double steps_persec = degrees_persec * axis->steps / 360.;
-
-    if (axis->mode == 1)
-        steps_persec *= 1<<(axis->resolution);
-    return lrint (steps_persec);
-}
-
 /* Given 'rate' enum from slew.h, look up configured rate in degrees/sec.
  * If 'neg' is true, make the velocity negative.
  * If 'track' is true, add the sidereal rate.
- * If 'west' is true, negate the whole thing to account for meridian flip.
- * Finally, convert degrees/sec to controller velocity in steps/sec.
  */
-int lookup_rate (struct config_axis *axis, int rate,
-                 bool neg, bool track, bool west)
+double lookup_rate (struct config_axis *axis, int rate,
+                    bool neg, bool track)
 {
-    double v;
+    double dps;
 
     switch (rate) {
         case SLEW_RATE_GUIDE:
-            v = axis->guide;
+            dps = axis->guide;
             break;
         case SLEW_RATE_SLOW:
-            v = axis->slow;
+            dps = axis->slow;
             break;
         case SLEW_RATE_MEDIUM:
-            v = axis->medium;
+            dps = axis->medium;
             break;
         case SLEW_RATE_FAST:
-            v = axis->fast;
+            dps = axis->fast;
             break;
         default:
-            v = 0.;
+            dps = 0.;
             break;
     }
     if (neg)
-        v *= -1.;
+        dps *= -1.;
     if (track)
-        v -= axis->sidereal;
-    if (west)
-        v *= -1.;
-    return controller_velocity (axis, v);
+        dps -= axis->sidereal;
+    return dps;
 }
 
 /* A new slew "key press" event ignores a slew in progress on the
@@ -294,46 +282,53 @@ int lookup_rate (struct config_axis *axis, int rate,
  * handle this, even if direction is reversed.  The "key release" cancels
  * this and any other slew in progress.  The axes are independent.
  * It is possible to configure slew rates that will result in a controller
- * error;  motion_move_constant() will return -1 with errno == EINVAL in
+ * error;  motion_move_constant_dps() will return -1 with errno == EINVAL in
  * that case and the slew will fail.
  */
 void slew_update (struct prog_context *ctx, int newmask, int rate)
 {
+    double dps;
+
     if ((newmask & SLEW_RA_PLUS) && (newmask & SLEW_RA_MINUS))
         newmask &= ~(SLEW_RA_PLUS + SLEW_RA_MINUS);
     if ((newmask & SLEW_DEC_PLUS) && (newmask & SLEW_DEC_MINUS))
         newmask &= ~(SLEW_DEC_PLUS + SLEW_DEC_MINUS);
 
     if ((newmask & SLEW_RA_PLUS) || (newmask & SLEW_RA_MINUS)) {
-        int cv = lookup_rate (&ctx->opt.t, rate, (newmask & SLEW_RA_MINUS),
-                              ctx->t_tracking, ctx->west);
-        if (motion_move_constant (ctx->t, cv) < 0)
-            err ("t: move at v=%d", cv);
+        dps = lookup_rate (&ctx->opt.t, rate, (newmask & SLEW_RA_MINUS),
+                           ctx->t_tracking);
+        if (motion_move_constant_dps (ctx->t, dps) < 0)
+            err ("t: move at v=%.1lf*/s", dps);
     }
     else {
         if ((ctx->slew & SLEW_RA_PLUS) || (ctx->slew & SLEW_RA_MINUS)) {
             if (ctx->t_tracking) {
-                int cv = lookup_rate (&ctx->opt.t, 0, false,
-                                     ctx->t_tracking, ctx->west);
-                if (motion_move_constant (ctx->t, cv) < 0)
-                    err ("t: move at v=%d", cv);
+                dps = lookup_rate (&ctx->opt.t, 0, false, ctx->t_tracking);
+                if (motion_move_constant_dps (ctx->t, dps) < 0)
+                    err ("t: move at v=%.1lf*/s", dps);
             }
             else {
-                if (motion_soft_stop (ctx->t) < 0)
+                if (motion_soft_stop (ctx->t) < 0) {
                     err ("t: stop");
+                    if (motion_abort (ctx->t) < 0)
+                        err ("t: abort");
+                }
             }
         }
     }
     if ((newmask & SLEW_DEC_PLUS) || (newmask & SLEW_DEC_MINUS)) {
-        int cv = lookup_rate (&ctx->opt.d, rate, (newmask & SLEW_DEC_MINUS),
-                              false, false);
-        if (motion_move_constant (ctx->d, cv) < 0)
-            err ("d: move at v=%d", cv);
+        dps = lookup_rate (&ctx->opt.d, rate, (newmask & SLEW_DEC_MINUS),
+                           false);
+        if (motion_move_constant_dps (ctx->d, dps) < 0)
+            err ("d: move at v=%.1lf*/s", dps);
     }
     else {
         if ((ctx->slew & SLEW_DEC_PLUS) || (ctx->slew & SLEW_DEC_MINUS)) {
-            if (motion_soft_stop (ctx->d) < 0)
+            if (motion_soft_stop (ctx->d) < 0) {
                 err ("d: stop");
+                if (motion_abort (ctx->d) < 0)
+                    err ("d: abort");
+            }
         }
     }
     ctx->slew = newmask;
@@ -345,14 +340,21 @@ void hpad_cb (struct hpad *h, void *arg)
     int dir = hpad_get_slew_direction (h);
     int rate = hpad_get_slew_rate (h);
     int ctrl = hpad_get_control (h);
+    double dps;
 
     /* M1 - emergency stop
      */
     if ((ctrl & HPAD_CONTROL_M1)) {
-        if (motion_abort (ctx->t) < 0)
+        if (motion_abort (ctx->t) < 0) {
             err ("t: motion_abort");
-        if (motion_abort (ctx->d) < 0)
+            if (motion_abort (ctx->t) < 0) // one retry
+                err ("t: motion_abort");
+        }
+        if (motion_abort (ctx->d) < 0) {
             err ("d: motion_abort");
+            if (motion_abort (ctx->d) < 0) // one retry
+                err ("t: motion_abort");
+        }
         ctx->t_tracking = false;
         ctx->slew = 0;
         return;
@@ -369,10 +371,9 @@ void hpad_cb (struct hpad *h, void *arg)
         }
         else {
             if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
-                int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
-                                      true, ctx->west);
-                if (motion_move_constant (ctx->t, cv) < 0)
-                    err ("t: move at v=%d", cv);
+                dps = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false, true);
+                if (motion_move_constant_dps (ctx->t, dps) < 0)
+                    err ("t: move at v=%.1lf*/s", dps);
             }
             ctx->t_tracking = true;
         }
@@ -422,7 +423,7 @@ void bbox_cb (struct bbox *bb, void *arg)
         err ("%s: error reading d position", __FUNCTION__);
         return;
     }
-    bbox_set_position (bb, ctx->west ? t : -1*t, d);
+    bbox_set_position (bb, t, d);
 }
 
 /* LX200 protocol requests that we update position.
@@ -443,7 +444,7 @@ void lx200_pos_cb (struct lx200 *lx, void *arg)
     }
     t_degrees = 360.0 * (t / ctx->opt.t.steps);
     d_degrees = 360.0 * (d / ctx->opt.d.steps);
-    lx200_set_position (lx, ctx->west ? t_degrees : -1*t_degrees, d_degrees);
+    lx200_set_position (lx, t_degrees, d_degrees);
 }
 
 /* LX200 protocol notifies us that we should retrieve goto target
@@ -457,11 +458,17 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
 
     lx200_get_target (lx, &t_degrees, &d_degrees);
 
+    msg ("goto %.1f*, %.1f*", t_degrees, d_degrees);
+
+    if (t_degrees < -90 || t_degrees > 90 || d_degrees < -90 || d_degrees > 90){
+        msg ("goto out of range");
+        return;
+    }
+
     t = t_degrees/360.0 * ctx->opt.t.steps;
     d = d_degrees/360.0 * ctx->opt.d.steps;
 
-    msg ("t,d: goto begin");
-    if (motion_goto_absolute (ctx->t, ctx->west ? t : -1*t) < 0)
+    if (motion_goto_absolute (ctx->t, t) < 0)
         err ("t: set position");
     if (motion_goto_absolute (ctx->d, d) < 0)
         err ("d: set position");
@@ -473,10 +480,16 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
 
-    if (motion_soft_stop (ctx->t) < 0)
+    if (motion_soft_stop (ctx->t) < 0) {
         err ("t: soft stop");
-    if (motion_soft_stop (ctx->d) < 0)
+        if (motion_abort (ctx->t) < 0)
+            err ("t: abort");
+    }
+    if (motion_soft_stop (ctx->d) < 0) {
         err ("d: soft stop");
+        if (motion_abort (ctx->d) < 0)
+            err ("t: abort");
+    }
 }
 
 /* Motion axis informs us that goto has completed.
@@ -487,13 +500,13 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
 void motion_cb (struct motion *m, void *arg)
 {
     struct prog_context *ctx = arg;
+    double dps;
 
     msg ("%s: goto end", motion_get_name (m));
     if (ctx->t_tracking && m == ctx->t) {
-        int cv = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false,
-                              true, ctx->west);
-        if (motion_move_constant (ctx->t, cv) < 0)
-            err ("t: move at v=%d", cv);
+        dps = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false, true);
+        if (motion_move_constant_dps (ctx->t, dps) < 0)
+            err ("t: move at v=%.1lf*/s", dps);
     }
 }
 

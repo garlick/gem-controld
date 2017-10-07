@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 
 enum {
     MOTION_DEBUG = 0x01,    /* send telemetry to stderr */
@@ -35,16 +36,24 @@ struct motion_config {
     int initv;          // initial velocity for ramp up (20:20000)
                         //   in full steps/s (auto), or pulses/s (fixed)
     int finalv;         // final velocity for ramp up (20:20000)
-};                      //   in full steps/s (auto), or pulses/s (fixed)
+                        //   in full steps/s (auto), or pulses/s (fixed)
+    int steps;          // steps per 360 degrees (including gear reduction)
+    bool ccw;           // true if positive motion is counter-clockwise
+};
 
 struct motion;
 typedef void (*motion_cb_f)(struct motion *m, void *arg);
 
 
-/* Move at fixed velocity, 0, +-20:20000 (+ = CW, - = CCW)
- * with ramp up or ramp down.
+/* Move at fixed velocity (in steps per second), with ramp up or ramp down.
  */
-int motion_move_constant (struct motion *m, int velocity);
+int motion_move_constant (struct motion *m, int sps);
+
+/* Move at fixed velocity (in degrees per second), with ramp up or ramp down.
+ * This is a wrapper for motion_move_constant() that uses configuration
+ * for steps, mode, and resolution to convert angular velocity to linear.
+ */
+int motion_move_constant_dps (struct motion *m, double dps);
 
 /* Query current position.
  */

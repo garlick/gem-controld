@@ -99,11 +99,21 @@ void point_set_target_ra (struct point *p, int hr, int min, double sec)
 
 void point_get_target (struct point *p, double *t, double *d)
 {
-    double ha = get_lst (p) - ln_hms_to_deg (&p->target.ra);
-    double dec = ln_dms_to_deg (&p->target.dec);
+    double ha = get_lst (p) - ln_hms_to_deg (&p->target.ra) - p->zpc.ra;
+    double dec = ln_dms_to_deg (&p->target.dec) - p->zpc.dec;
 
-    *t = ha - p->zpc.ra;
-    *d = dec - p->zpc.dec;
+    if (ha > 180.)
+        ha -= 360.;
+    else if (ha < -180.)
+        ha += 360.;
+
+    if (dec > 180.)
+        dec -= 360.;
+    else if (ha < -180.)
+        ha += 360.;
+
+    *t = ha;
+    *d = dec;
 }
 
 void point_set_position (struct point *p, double t, double d)
