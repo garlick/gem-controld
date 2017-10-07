@@ -42,7 +42,8 @@ static const struct option longopts[] = {
 
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
-void lx200_pos_cb (struct lx200 *lx, void *arg);
+void lx200_pos_ha_cb (struct lx200 *lx, void *arg);
+void lx200_pos_dec_cb (struct lx200 *lx, void *arg);
 
 static void usage (void)
 {
@@ -87,7 +88,8 @@ int main (int argc, char *argv[])
     lx = lx200_new ();
     if (lx200_init (lx, DEFAULT_LX200_PORT, LX200_DEBUG) < 0)
         err_exit ("hpad_init");
-    lx200_set_position_cb (lx, lx200_pos_cb, NULL);
+    lx200_set_position_ha_cb (lx, lx200_pos_ha_cb, NULL);
+    lx200_set_position_dec_cb (lx, lx200_pos_dec_cb, NULL);
     lx200_set_slew_cb (lx, lx200_slew_cb, NULL);
     lx200_set_goto_cb (lx, lx200_goto_cb, NULL);
     lx200_start (loop, lx);
@@ -103,9 +105,14 @@ int main (int argc, char *argv[])
     return 0;
 }
 
-void lx200_pos_cb (struct lx200 *lx, void *arg)
+void lx200_pos_ha_cb (struct lx200 *lx, void *arg)
 {
-    lx200_set_position (lx, 0., 0.);
+    lx200_set_position_ha (lx, 0.);
+}
+
+void lx200_pos_dec_cb (struct lx200 *lx, void *arg)
+{
+    lx200_set_position_dec (lx, 0.);
 }
 
 void lx200_slew_cb (struct lx200 *lx, void *arg)

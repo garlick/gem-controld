@@ -24,6 +24,7 @@ struct point;
 
 enum {
     POINT_DEBUG = 1,
+    POINT_WEST = 2,     // set initial point to western horizon, not eastern
 };
 
 struct point *point_new (void);
@@ -32,10 +33,11 @@ void point_destroy (struct point *p);
 void point_set_flags (struct point *p, int flags);
 
 /* Set observer's position (lat,lng)
- * 'deg' may be signed.
+ * Sign is set separately with _neg(), to support a quirk of LX200 protocol
  */
 void point_set_latitude (struct point *p, int deg, int min, double sec);
 void point_set_longitude (struct point *p, int deg, int min, double sec);
+void point_set_longitude_neg (struct point *p, unsigned short neg);
 
 /* Set target object coordinates in (ra,dec).
  * The target object is a "register" used for syncing zero point corrections
@@ -56,7 +58,8 @@ void point_sync_target (struct point *p);
 
 /* Set/update uncorrected telescope position (in degrees).
  */
-void point_set_position (struct point *p, double t, double d);
+void point_set_position_ha (struct point *p, double t);
+void point_set_position_dec (struct point *p, double dec);
 
 /* Get corrected telescope position in (ra,dec).
  * This is computed from uncorrected telescope position, zero point

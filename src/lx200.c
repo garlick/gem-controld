@@ -71,7 +71,8 @@ struct lx200 {
     int flags;
     int port;
     int fd;
-    struct callback pos;
+    struct callback pos_ha;
+    struct callback pos_dec;
     struct callback slew;
     struct callback gto;
     struct callback stop;
@@ -153,7 +154,16 @@ static int process_command (struct client *c, const char *cmd)
     /* :SGsHH.H# - Set num hours added to local time to yield UTC
      */
     else if (!strncmp (cmd, ":SG", 3)) {
-        rc = write_all (c, "1", 1);
+        double offset;
+        if (sscanf (cmd + 3, "%lf#", &offset) == 1) {
+            unsigned short neg = 0;
+            if (offset > 0)
+                neg = 1;
+            point_set_longitude_neg (c->lx->point, neg);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :SLHH:MM:SS# - Set the local time
      */
@@ -181,9 +191,9 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":GR#")) {
         int hr, min;
         double sec;
-        if (c->lx->pos.cb)
-            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
-        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        if (c->lx->pos_ha.cb)
+            c->lx->pos_ha.cb (c->lx, c->lx->pos_ha.arg); // update position t
+        point_set_position_ha (c->lx->point, c->lx->t);
         point_get_position_ra (c->lx->point, &hr, &min, &sec);
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
@@ -192,9 +202,9 @@ static int process_command (struct client *c, const char *cmd)
     else if (!strcmp (cmd, ":GD#")) {
         int deg, min;
         double sec;
-        if (c->lx->pos.cb)
-            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
-        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        if (c->lx->pos_dec.cb)
+            c->lx->pos_dec.cb (c->lx, c->lx->pos_dec.arg); // update position d
+        point_set_position_dec (c->lx->point, c->lx->d);
         point_get_position_dec (c->lx->point, &deg, &min, &sec);
         rc = wpf (c, "%+.2d*%.2d'%.2d#", deg, min, (int)sec);
     }
@@ -235,7 +245,7 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "1", 1);
         }
         else if (sscanf (cmd + 3, "%d:%d.%d#", &hr, &min, &tenths) == 2) {
-            point_set_target_dec (c->lx->point, hr, min, 6*tenths);
+            point_set_target_ra (c->lx->point, hr, min, 6*tenths);
             rc = write_all (c, "1", 1);
         }
         else
@@ -259,17 +269,22 @@ static int process_command (struct client *c, const char *cmd)
     /* :CM# - sync telescope's position with currently slected db object coord
      */
     else if (!strcmp (cmd, ":CM#")) {
-        if (c->lx->pos.cb)
-            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
-        point_set_position (c->lx->point, c->lx->t, c->lx->d);
+        if (c->lx->pos_ha.cb)
+            c->lx->pos_ha.cb (c->lx, c->lx->pos_ha.arg); // update position t
+        if (c->lx->pos_dec.cb)
+            c->lx->pos_dec.cb (c->lx, c->lx->pos_dec.arg); // update position d
+        point_set_position_ha (c->lx->point, c->lx->t);
+        point_set_position_dec (c->lx->point, c->lx->d);
         point_sync_target (c->lx->point);
         rc = wpf (c, "You Are Here#");
     }
     /* :MS# - slew to target object
      */
     else if (!strcmp (cmd, ":MS#")) {
-        if (c->lx->pos.cb)
-            c->lx->pos.cb (c->lx, c->lx->pos.arg); // update position t,d
+        if (c->lx->pos_ha.cb)
+            c->lx->pos_ha.cb (c->lx, c->lx->pos_ha.arg); // update position t
+        if (c->lx->pos_dec.cb)
+            c->lx->pos_dec.cb (c->lx, c->lx->pos_dec.arg); // update position d
         if (c->lx->gto.cb)
             c->lx->gto.cb (c->lx, c->lx->gto.arg);
         rc = write_all (c, "0", 1); // 0 = sucess
@@ -429,16 +444,26 @@ void lx200_set_slew_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
     lx->slew.arg = arg;
 }
 
-void lx200_set_position (struct lx200 *lx, double t, double d)
+void lx200_set_position_ha (struct lx200 *lx, double t)
 {
     lx->t = t;
+}
+
+void lx200_set_position_dec (struct lx200 *lx, double d)
+{
     lx->d = d;
 }
 
-void lx200_set_position_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
+void lx200_set_position_ha_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
-    lx->pos.cb = cb;
-    lx->pos.arg = arg;
+    lx->pos_ha.cb = cb;
+    lx->pos_ha.arg = arg;
+}
+
+void lx200_set_position_dec_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
+{
+    lx->pos_dec.cb = cb;
+    lx->pos_dec.arg = arg;
 }
 
 void lx200_get_target (struct lx200 *lx, double *t, double *d)
@@ -461,6 +486,7 @@ void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 int lx200_init (struct lx200 *lx, int port, int flags)
 {
     struct sockaddr_in addr;
+    int point_flags = 0;
 
     lx->flags = flags;
 
@@ -482,7 +508,10 @@ int lx200_init (struct lx200 *lx, int port, int flags)
         msg ("listening on port %d", port);
 
     if ((lx->flags & LX200_DEBUG))
-        point_set_flags (lx->point, POINT_DEBUG);
+        point_flags |= POINT_DEBUG;
+    if ((lx->flags & LX200_POINT_WEST))
+        point_flags |= POINT_WEST;
+    point_set_flags (lx->point, point_flags);
 
     return 0;
 }
