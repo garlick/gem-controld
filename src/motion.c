@@ -63,6 +63,9 @@
 #include "log.h"
 #include "motion.h"
 
+#define MAX_CMD     80
+#define MAX_BUF     1024
+
 
 struct motion {
     int fd;
@@ -74,7 +77,7 @@ struct motion {
     bool timeout;
     struct ev_loop *main_loop;
     struct ev_loop *tmp_loop;
-    char inbuf[1024];
+    char inbuf[MAX_BUF];
     int inbuf_len;
     bool busy;
     motion_cb_f cb;
@@ -123,7 +126,7 @@ static char *toliteral (const char *s)
  */
 static int command_send (struct motion *m, const char *s)
 {
-    char buf[80];
+    char buf[MAX_CMD];
 
     if (m->busy) {
         if (result_recv (m, NULL, 0) < 0)
@@ -327,7 +330,7 @@ static int serial_open (const char *devname)
  */
 static int motion_reset (struct motion *m)
 {
-    char buf[80];
+    char buf[MAX_CMD];
 
     if (m->flags & MOTION_DEBUG) {
         fprintf (stderr, "%s>'\\003' + 200ms delay\n", m->name);
@@ -370,7 +373,7 @@ int motion_move_constant (struct motion *m, int sps)
  */
 int motion_get_position (struct motion *m, double *position)
 {
-    char buf[80];
+    char buf[MAX_CMD];
     double pos;
 
     if (command_sendf (m, "Z0") < 0)
@@ -389,7 +392,7 @@ int motion_get_position (struct motion *m, double *position)
  */
 int motion_get_status (struct motion *m, int *status)
 {
-    char buf[80];
+    char buf[MAX_CMD];
     int s;
 
     if (command_sendf (m, "^") < 0)
@@ -471,7 +474,7 @@ int motion_set_io (struct motion *m, uint8_t val)
  */
 int motion_get_io (struct motion *m, uint8_t *val)
 {
-    char buf[80];
+    char buf[MAX_CMD];
     int value;
 
     if (command_send (m, "A129") < 0)
