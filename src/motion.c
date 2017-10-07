@@ -372,17 +372,17 @@ int motion_move_constant (struct motion *m, int sps)
 int motion_get_position (struct motion *m, double *position)
 {
     char buf[80];
-    float pos;
+    double pos;
 
     if (command_sendf (m, "Z0") < 0)
         return -1;
     if (result_recv (m, buf, sizeof (buf)) < 0)
         return -1;
-    if (sscanf (buf, "Z0 %f", &pos) != 1) {
+    if (sscanf (buf, "Z0 %lf", &pos) != 1) {
         errno = EPROTO;
         return -1;
     }
-    *position = (double)pos * (m->cfg.ccw ? -1 : 1);
+    *position = pos * (m->cfg.ccw ? -1 : 1);
     return 0;
 }
 
