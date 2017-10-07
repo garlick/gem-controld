@@ -473,7 +473,8 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
 
     msg ("goto %.1f*, %.1f*", t_degrees, d_degrees);
 
-    if (t_degrees < -90 || t_degrees > 90 || d_degrees < -90 || d_degrees > 90){
+    if (t_degrees < -120 || t_degrees > 120
+                         || d_degrees < -120 || d_degrees > 120) {
         msg ("goto out of range");
         return;
     }
