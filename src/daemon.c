@@ -69,7 +69,8 @@ void hpad_cb (struct hpad *h, void *arg);
 void guide_cb (struct guide *g, void *arg);
 void bbox_cb (struct bbox *bb, void *arg);
 void motion_cb (struct motion *m, void *arg);
-void lx200_pos_cb (struct lx200 *lx, void *arg);
+void lx200_pos_ha_cb (struct lx200 *lx, void *arg);
+void lx200_pos_dec_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_stop_cb (struct lx200 *lx, void *arg);
@@ -188,7 +189,8 @@ int main (int argc, char *argv[])
     ctx.lx200 = lx200_new ();
     if (lx200_init (ctx.lx200, DEFAULT_LX200_PORT, lx200_flags) < 0)
         err_exit ("bbox_init");
-    lx200_set_position_cb (ctx.lx200, lx200_pos_cb, &ctx);
+    lx200_set_position_ha_cb (ctx.lx200, lx200_pos_ha_cb, &ctx);
+    lx200_set_position_dec_cb (ctx.lx200, lx200_pos_dec_cb, &ctx);
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
     lx200_set_goto_cb (ctx.lx200, lx200_goto_cb, &ctx);
     lx200_set_stop_cb (ctx.lx200, lx200_stop_cb, &ctx);
@@ -429,23 +431,32 @@ void bbox_cb (struct bbox *bb, void *arg)
 
 /* LX200 protocol requests that we update position.
  */
-void lx200_pos_cb (struct lx200 *lx, void *arg)
+void lx200_pos_ha_cb (struct lx200 *lx, void *arg)
 {
     struct prog_context *ctx = arg;
-    double t, d;
-    double t_degrees, d_degrees;
+    double t;
+    double t_degrees;
 
     if (motion_get_position (ctx->t, &t) < 0) {
         err ("%s: error reading t position", __FUNCTION__);
         return;
     }
+    t_degrees = 360.0 * (t / ctx->opt.t.steps);
+    lx200_set_position_ha (lx, t_degrees);
+}
+
+void lx200_pos_dec_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    double d;
+    double d_degrees;
+
     if (motion_get_position (ctx->d, &d) < 0) {
         err ("%s: error reading d position", __FUNCTION__);
         return;
     }
-    t_degrees = 360.0 * (t / ctx->opt.t.steps);
     d_degrees = 360.0 * (d / ctx->opt.d.steps);
-    lx200_set_position (lx, t_degrees, d_degrees);
+    lx200_set_position_dec (lx, d_degrees);
 }
 
 /* LX200 protocol notifies us that we should retrieve goto target

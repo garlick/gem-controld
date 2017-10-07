@@ -116,14 +116,20 @@ void point_get_target (struct point *p, double *t, double *d)
     *d = dec;
 }
 
-void point_set_position (struct point *p, double t, double d)
+void point_set_position_ha (struct point *p, double t)
 {
     p->posn_raw.ra = t;
+
+    if ((p->flags & POINT_DEBUG))
+        msg ("%s: %.6lf", __FUNCTION__, p->posn_raw.ra);
+}
+
+void point_set_position_dec (struct point *p, double d)
+{
     p->posn_raw.dec = d;
 
     if ((p->flags & POINT_DEBUG))
-        msg ("%s: raw position = (%.6lf, %.6lf)",
-             __FUNCTION__, p->posn_raw.ra, p->posn_raw.dec);
+        msg ("%s: %.6lf", __FUNCTION__, p->posn_raw.dec);
 }
 
 void point_sync_target (struct point *p)

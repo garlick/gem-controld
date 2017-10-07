@@ -56,7 +56,8 @@ void point_sync_target (struct point *p);
 
 /* Set/update uncorrected telescope position (in degrees).
  */
-void point_set_position (struct point *p, double t, double d);
+void point_set_position_ha (struct point *p, double t);
+void point_set_position_dec (struct point *p, double dec);
 
 /* Get corrected telescope position in (ra,dec).
  * This is computed from uncorrected telescope position, zero point
