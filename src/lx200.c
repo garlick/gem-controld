@@ -154,7 +154,16 @@ static int process_command (struct client *c, const char *cmd)
     /* :SGsHH.H# - Set num hours added to local time to yield UTC
      */
     else if (!strncmp (cmd, ":SG", 3)) {
-        rc = write_all (c, "1", 1);
+        double offset;
+        if (sscanf (cmd + 3, "%lf#", &offset) == 1) {
+            unsigned short neg = 0;
+            if (offset > 0)
+                neg = 1;
+            point_set_longitude_neg (c->lx->point, neg);
+            rc = write_all (c, "1", 1);
+        }
+        else
+            rc = write_all (c, "0", 1);
     }
     /* :SLHH:MM:SS# - Set the local time
      */

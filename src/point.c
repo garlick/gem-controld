@@ -37,6 +37,8 @@ struct point {
     struct ln_equ_posn      posn_raw; // uncorrected telescope position (deg)
     struct ln_equ_posn      zpc;      // zero point correction (deg)
     struct lnh_equ_posn     target;   // ra,dec of current "target" (deg)
+    int lng_pos_isset:1;
+    int lng_sign_isset:1;
 };
 
 /* Get the apparent local sidereal time, in degrees,
@@ -67,13 +69,27 @@ void point_set_latitude (struct point *p, int deg, int min, double sec)
 
 void point_set_longitude (struct point *p, int deg, int min, double sec)
 {
-    p->observer.lng.neg = (deg < 0);
+    // p->observer.lng.neg
     p->observer.lng.degrees = abs (deg);
     p->observer.lng.minutes = min;
     p->observer.lng.seconds = sec;
+    p->lng_pos_isset = 1;
 
-    if ((p->flags & POINT_DEBUG))
-        msg ("%s: %.6lf", __FUNCTION__, ln_dms_to_deg (&p->observer.lng));
+    if ((p->flags & POINT_DEBUG)) {
+        if (p->lng_sign_isset)
+            msg ("%s: %.6lf", __FUNCTION__, ln_dms_to_deg (&p->observer.lng));
+    }
+}
+
+void point_set_longitude_neg (struct point *p, unsigned short neg)
+{
+    p->observer.lng.neg = neg;
+    p->lng_sign_isset = 1;
+
+    if ((p->flags & POINT_DEBUG)) {
+        if (p->lng_pos_isset)
+            msg ("%s: %.6lf", __FUNCTION__, ln_dms_to_deg (&p->observer.lng));
+    }
 }
 
 void point_set_target_dec (struct point *p, int deg, int min, double sec)

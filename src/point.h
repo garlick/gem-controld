@@ -32,10 +32,11 @@ void point_destroy (struct point *p);
 void point_set_flags (struct point *p, int flags);
 
 /* Set observer's position (lat,lng)
- * 'deg' may be signed.
+ * Sign is set separately with _neg(), to support a quirk of LX200 protocol
  */
 void point_set_latitude (struct point *p, int deg, int min, double sec);
 void point_set_longitude (struct point *p, int deg, int min, double sec);
+void point_set_longitude_neg (struct point *p, unsigned short neg);
 
 /* Set target object coordinates in (ra,dec).
  * The target object is a "register" used for syncing zero point corrections
