@@ -458,13 +458,18 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
 
     lx200_get_target (lx, &t_degrees, &d_degrees);
 
+    msg ("goto %.1f*, %.1f*", t_degrees, d_degrees);
+
+    if (t_degrees < -90 || t_degrees > 90 || d_degrees < -90 || d_degrees > 90){
+        msg ("goto out of range");
+        return;
+    }
+
     t = t_degrees/360.0 * ctx->opt.t.steps;
     d = d_degrees/360.0 * ctx->opt.d.steps;
 
-    msg ("t: goto %.1f", t);
     if (motion_goto_absolute (ctx->t, t) < 0)
         err ("t: set position");
-    msg ("d: goto %.1f", d);
     if (motion_goto_absolute (ctx->d, d) < 0)
         err ("d: set position");
 }
