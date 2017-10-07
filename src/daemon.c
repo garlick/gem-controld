@@ -159,11 +159,11 @@ int main (int argc, char *argv[])
     if (!(ctx.loop = ev_loop_new (EVFLAG_AUTO)))
         err_exit ("ev_loop_new");
 
-    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags, ctx.west ? false : true);
+    ctx.t = init_axis (&ctx.opt.t, "t", motion_flags, true);
     motion_set_cb (ctx.t, motion_cb, &ctx);
     motion_start (ctx.loop, ctx.t);
 
-    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags, false);
+    ctx.d = init_axis (&ctx.opt.d, "d", motion_flags, ctx.west ? true : false);
     motion_set_cb (ctx.d, motion_cb, &ctx);
     motion_start (ctx.loop, ctx.d);
 
