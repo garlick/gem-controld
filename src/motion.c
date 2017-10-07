@@ -175,7 +175,6 @@ static int result_consume (struct motion *m, char *buf, int len)
 
     if (!(p = strstr (m->inbuf, "\r\n")))
         return -1;
-    assert (p != NULL);
     *p = '\0';
 
     if ((m->flags & MOTION_DEBUG)) {
