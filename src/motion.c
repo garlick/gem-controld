@@ -459,8 +459,16 @@ int motion_soft_stop (struct motion *m)
  */
 int motion_abort (struct motion *m)
 {
-    m->busy = false; // don't wait for command result
-    return command_send (m, "\033");
+    char buf[MAX_CMD];
+
+    m->busy = false; // don't wait for previous command result
+    if (command_send (m, "\033") < 0)
+        return -1;
+    do {
+        if (result_recv (m, buf, sizeof (buf)) < 0)
+            return -1;
+    } while (strcmp (buf, "#") != 0);
+    return 0;
 }
 
 /* A - port write

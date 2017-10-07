@@ -345,6 +345,7 @@ void hpad_cb (struct hpad *h, void *arg)
     /* M1 - emergency stop
      */
     if ((ctrl & HPAD_CONTROL_M1)) {
+        msg ("emergency stop");
         if (motion_abort (ctx->t) < 0) {
             err ("t: motion_abort");
             if (motion_abort (ctx->t) < 0) // one retry
