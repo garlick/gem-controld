@@ -90,8 +90,8 @@ struct motion {
 
 static const double status_poll_sec = 0.3;  // poll period during goto
 
-static const double timeout_sec = 5.;   // waiting for result - give up
-static const double warn_sec = 1.;      // waiting for result - warn
+static const double timeout_sec = 10.;  // waiting for result - give up
+static const double warn_sec = 4.;      // waiting for result - warn
 
 static int result_recv (struct motion *m, char *buf, int len);
 static void result_clear (struct motion *m);
