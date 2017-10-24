@@ -92,6 +92,20 @@ void point_set_longitude_neg (struct point *p, unsigned short neg)
     }
 }
 
+void point_get_latitude (struct point *p, int *deg, int *min, double *sec)
+{
+    *deg = p->observer.lat.degrees * (p->observer.lat.neg ? -1 : 1);
+    *min = p->observer.lat.minutes;
+    *sec = p->observer.lat.seconds;
+}
+
+void point_get_longitude (struct point *p, int *deg, int *min, double *sec)
+{
+    *deg = p->observer.lng.degrees * (p->observer.lng.neg ? -1 : 1);
+    *min = p->observer.lng.minutes;
+    *sec = p->observer.lng.seconds;
+}
+
 void point_set_target_dec (struct point *p, int deg, int min, double sec)
 {
     p->target.dec.neg = (deg < 0);
