@@ -80,7 +80,9 @@ void point_get_localdate (struct point *p, int *day, int *month, int *year)
 }
 
 /* Get the apparent local sidereal time, in degrees,
- * derived from the system clock.
+ * derived from the system clock and longitude.
+ * Assumes point_set_longitude() and point_set_longitude_neg()
+ * have already been called.
  */
 static double get_lst (struct point *p)
 {
