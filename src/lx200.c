@@ -191,7 +191,7 @@ static int process_command (struct client *c, const char *cmd)
     /* :GM# - get site 1 name (returns <string>#)
      */
     else if (!strcmp (cmd, ":GM#")) {
-        rc = wpf (c, "%s#", "fake site name"); // XXX
+        rc = wpf (c, "%s#", "site 1 name"); // XXX lookup in config?
     }
     /* :GT# - get tracking rate (returns TT.T#)
      * In Hz where 60.0 Hz = 1 rev/24h
@@ -221,17 +221,24 @@ static int process_command (struct client *c, const char *cmd)
      * decimal hours to add to local time to convert it to UTC
      */
     else if (!strcmp (cmd, ":GG#")) {
-        rc = wpf (c, "%+2.1f#", -8.0); // XXX
+        double offset;
+        point_get_gmtoff (c->lx->point, &offset);
+        rc = wpf (c, "%+2.1f#", offset);
     }
     /* :GL#  - get local time in 24 hour format (return HH:MM:SS#)
      */
     else if (!strcmp (cmd, ":GL#")) {
-        rc = wpf (c, "%.2d:%.2d:%.2d#", 1,2,3); // XXX
+        int hr, min;
+        double sec;
+        point_get_localtime (c->lx->point, &hr, &min, &sec);
+        rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
     /* :GC# - get current date (returns MM/DD/YY#)
      */
     else if (!strcmp (cmd, ":GC#")) {
-        rc = wpf (c, "%.2d/%.2d/%.2d#", 1,2,17); // XXX
+        int day, month, year;
+        point_get_localdate (c->lx->point, &day, &month, &year);
+        rc = wpf (c, "%.2d/%.2d/%.2d#", day, month, year - 2000);
     }
     /* :GR# - Get telescope RA
      */
