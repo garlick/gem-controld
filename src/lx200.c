@@ -138,6 +138,8 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SgDDD*MM# - Set site longitude to DDD*MM
+     * N.B. based on wire observations and the protocol doc, the sign is
+     * omitted here and must be derived from :SG gmtoff.
      */
     else if (!strncmp (cmd, ":Sg", 3)) {
         int deg, min;
@@ -149,6 +151,7 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SGsHH.H# - Set num hours added to local time to yield UTC
+     * N.B. ignored by pointing model except to set sign on longitude.
      */
     else if (!strncmp (cmd, ":SG", 3)) {
         double offset;
@@ -163,11 +166,13 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SLHH:MM:SS# - Set the local time
+     * N.B. ignored by pointing model.
      */
     else if (!strncmp (cmd, ":SL", 3)) {
         rc = write_all (c, "1", 1);
     }
     /* :SCMM/DD/YY# - Set the local date
+     * N.B. ignored by pointing model.
      */
     else if (!strncmp (cmd, ":SC", 3)) {
         rc = wpf (c, "1%s#", "Updating Planetary Data");
