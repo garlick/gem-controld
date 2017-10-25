@@ -24,9 +24,6 @@
 
 /* Ref: Meade Telescope Serial Command Protocol Revision L, 9 October 2002.
  * https://www.meade.com/support/LX200CommandSet.pdf
- *
- * Only the subset of commands needed to get along wtih Sky Safari are
- * implemented as yet.
  */
 
 #include <stdio.h>
@@ -141,6 +138,8 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SgDDD*MM# - Set site longitude to DDD*MM
+     * N.B. based on wire observations and the protocol doc, the sign is
+     * omitted here and must be derived from :SG gmtoff.
      */
     else if (!strncmp (cmd, ":Sg", 3)) {
         int deg, min;
@@ -152,6 +151,7 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SGsHH.H# - Set num hours added to local time to yield UTC
+     * N.B. ignored by pointing model except to set sign on longitude.
      */
     else if (!strncmp (cmd, ":SG", 3)) {
         double offset;
@@ -166,11 +166,13 @@ static int process_command (struct client *c, const char *cmd)
             rc = write_all (c, "0", 1);
     }
     /* :SLHH:MM:SS# - Set the local time
+     * N.B. ignored by pointing model.
      */
     else if (!strncmp (cmd, ":SL", 3)) {
         rc = write_all (c, "1", 1);
     }
     /* :SCMM/DD/YY# - Set the local date
+     * N.B. ignored by pointing model.
      */
     else if (!strncmp (cmd, ":SC", 3)) {
         rc = wpf (c, "1%s#", "Updating Planetary Data");
@@ -186,6 +188,63 @@ static int process_command (struct client *c, const char *cmd)
         c->lx->slew_rate = SLEW_RATE_MEDIUM;
     else if (!strcmp (cmd, ":RS#"))
         c->lx->slew_rate = SLEW_RATE_FAST;
+    /* :Gc# - get calendar format (returns 12# or 24#)
+     */
+    else if (!strcmp (cmd, ":Gc#")) {
+        rc = wpf (c, "24#");
+    }
+    /* :GM# - get site 1 name (returns <string>#)
+     */
+    else if (!strcmp (cmd, ":GM#")) {
+        rc = wpf (c, "%s#", "site 1 name"); // XXX lookup in config?
+    }
+    /* :GT# - get tracking rate (returns TT.T#)
+     * In Hz where 60.0 Hz = 1 rev/24h
+     */
+    else if (!strcmp (cmd, ":GT#")) {
+        rc = wpf (c, "%2.1f#", 60.0); // XXX
+    }
+    /* :Gt# - get current site latitude (returns sDD*MM#)
+     * (pos is north)
+     */
+    else if (!strcmp (cmd, ":Gt#")) {
+        int deg, min;
+        double sec;
+        point_get_latitude (c->lx->point, &deg, &min, &sec);
+        rc = wpf (c, "%.2d*%.2d#", deg, min);
+    }
+    /* :Gg# - get current site longitude (returns sDDD*MM#)
+     * (neg is east)
+     */
+    else if (!strcmp (cmd, ":Gg#")) {
+        int deg, min;
+        double sec;
+        point_get_longitude (c->lx->point, &deg, &min, &sec);
+        rc = wpf (c, "%.2d*%.2d#", deg, min);
+    }
+    /* :GG# - get UTC offset time (returns sHH# or sHH.H#)
+     * decimal hours to add to local time to convert it to UTC
+     */
+    else if (!strcmp (cmd, ":GG#")) {
+        double offset;
+        point_get_gmtoff (c->lx->point, &offset);
+        rc = wpf (c, "%+2.1f#", offset);
+    }
+    /* :GL#  - get local time in 24 hour format (return HH:MM:SS#)
+     */
+    else if (!strcmp (cmd, ":GL#")) {
+        int hr, min;
+        double sec;
+        point_get_localtime (c->lx->point, &hr, &min, &sec);
+        rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
+    }
+    /* :GC# - get current date (returns MM/DD/YY#)
+     */
+    else if (!strcmp (cmd, ":GC#")) {
+        int day, month, year;
+        point_get_localdate (c->lx->point, &day, &month, &year);
+        rc = wpf (c, "%.2d/%.2d/%.2d#", day, month, year - 2000);
+    }
     /* :GR# - Get telescope RA
      */
     else if (!strcmp (cmd, ":GR#")) {

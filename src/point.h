@@ -39,6 +39,11 @@ void point_set_latitude (struct point *p, int deg, int min, double sec);
 void point_set_longitude (struct point *p, int deg, int min, double sec);
 void point_set_longitude_neg (struct point *p, unsigned short neg);
 
+/* Get observer's position (lat,lng)
+ */
+void point_get_latitude (struct point *p, int *deg, int *min, double *sec);
+void point_get_longitude (struct point *p, int *deg, int *min, double *sec);
+
 /* Set target object coordinates in (ra,dec).
  * The target object is a "register" used for syncing zero point corrections
  * and goto operations.
@@ -68,7 +73,9 @@ void point_set_position_dec (struct point *p, double dec);
 void point_get_position_ra (struct point *p, int *hr, int *min, double *sec);
 void point_get_position_dec (struct point *p, int *deg, int *min, double *sec);
 
-
+void point_get_gmtoff (struct point *p, double *offset);
+void point_get_localtime (struct point *p, int *hour, int *min, double *sec);
+void point_get_localdate (struct point *p, int *day, int *month, int *year);
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

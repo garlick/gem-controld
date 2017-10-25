@@ -39,10 +39,50 @@ struct point {
     struct lnh_equ_posn     target;   // ra,dec of current "target" (deg)
     int lng_pos_isset:1;
     int lng_sign_isset:1;
+
+    double utc_offset;
 };
 
+/* Get the local time, derived from the system clock.
+ * N.B. libnova ln_get_local_date() obtains gmtoff on linux by calling
+ * time(), then localtime(); then calling ln_date_to_zonedata() with
+ * the supplied jd and localtime->tm_gmtoff.
+ */
+void point_get_localtime (struct point *p, int *hr, int *min, double *sec)
+{
+    double jd = ln_get_julian_from_sys (); // UT
+    struct ln_zonedate zd;
+
+    ln_get_local_date (jd, &zd);
+    *hr = zd.hours;
+    *min = zd.minutes;
+    *sec = zd.seconds;
+}
+
+void point_get_gmtoff (struct point *p, double *offset)
+{
+    double jd = ln_get_julian_from_sys (); // UT
+    struct ln_zonedate zd;
+
+    ln_get_local_date (jd, &zd);
+    *offset = zd.gmtoff;
+}
+
+void point_get_localdate (struct point *p, int *day, int *month, int *year)
+{
+    double jd = ln_get_julian_from_sys (); // UT
+    struct ln_zonedate zd;
+
+    ln_get_local_date (jd, &zd);
+    *day = zd.days;
+    *month = zd.months;
+    *year = zd.years;
+}
+
 /* Get the apparent local sidereal time, in degrees,
- * derived from the system clock.
+ * derived from the system clock and longitude.
+ * Assumes point_set_longitude() and point_set_longitude_neg()
+ * have already been called.
  */
 static double get_lst (struct point *p)
 {
@@ -90,6 +130,20 @@ void point_set_longitude_neg (struct point *p, unsigned short neg)
         if (p->lng_pos_isset)
             msg ("%s: %.6lf", __FUNCTION__, ln_dms_to_deg (&p->observer.lng));
     }
+}
+
+void point_get_latitude (struct point *p, int *deg, int *min, double *sec)
+{
+    *deg = p->observer.lat.degrees * (p->observer.lat.neg ? -1 : 1);
+    *min = p->observer.lat.minutes;
+    *sec = p->observer.lat.seconds;
+}
+
+void point_get_longitude (struct point *p, int *deg, int *min, double *sec)
+{
+    *deg = p->observer.lng.degrees * (p->observer.lng.neg ? -1 : 1);
+    *min = p->observer.lng.minutes;
+    *sec = p->observer.lng.seconds;
 }
 
 void point_set_target_dec (struct point *p, int deg, int min, double sec)
