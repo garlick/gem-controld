@@ -235,12 +235,22 @@ static int process_command (struct client *c, const char *cmd)
         point_get_gmtoff (c->lx->point, &offset);
         rc = wpf (c, "%+2.1f#", offset);
     }
-    /* :GL#  - get local time in 24 hour format (return HH:MM:SS#)
+    /* :GL# - get local time in 24 hour format (return HH:MM:SS#)
      */
     else if (!strcmp (cmd, ":GL#")) {
         int hr, min;
         double sec;
         point_get_localtime (c->lx->point, &hr, &min, &sec);
+        rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
+    }
+    /* :Ga# - get local time in 12 hour format (return HH:MM:SS#)
+     */
+    else if (!strcmp (cmd, ":Ga#")) {
+        int hr, min;
+        double sec;
+        point_get_localtime (c->lx->point, &hr, &min, &sec);
+        if (hr > 12)
+            hr -= 12;
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
     /* :GC# - get current date (returns MM/DD/YY#)
@@ -330,6 +340,16 @@ static int process_command (struct client *c, const char *cmd)
         else
             rc = write_all (c, "0", 1);
     }
+    /* :Gr# - get target object RA (returns HH:MM.T# or HH:MM:SS)
+     */
+    else if (!strcmp (cmd, ":Gr#")) {
+        // FIXME
+    }
+    /* :Gd# - get target object DEC (returns sDD*MM# or sDD*MM'SS#)
+     */
+    else if (!strcmp (cmd, ":Gd#")) {
+        // FIXME
+    }
     /* :CM# - sync telescope's position with currently slected db object coord
      */
     else if (!strcmp (cmd, ":CM#")) {
@@ -340,9 +360,11 @@ static int process_command (struct client *c, const char *cmd)
         point_set_position_ha (c->lx->point, c->lx->t);
         point_set_position_dec (c->lx->point, c->lx->d);
         point_sync_target (c->lx->point);
-        rc = wpf (c, "You Are Here#");
+        rc = wpf (c, "%s#", "You are here");
     }
-    /* :MS# - slew to target object
+    /* :MS# - slew to target object (returns 0 for success).
+     * Other responses 1<string># - error such as "object below horizon",
+     * 2<string># - other...
      */
     else if (!strcmp (cmd, ":MS#")) {
         if (c->lx->pos_ha.cb)
@@ -351,9 +373,7 @@ static int process_command (struct client *c, const char *cmd)
             c->lx->pos_dec.cb (c->lx, c->lx->pos_dec.arg); // update position d
         if (c->lx->gto.cb)
             c->lx->gto.cb (c->lx, c->lx->gto.arg);
-        rc = write_all (c, "0", 1); // 0 = sucess
-                                    // 1<string># - object below horizon
-                                    // 2<string># - other...
+        rc = write_all (c, "0", 1); // success
     }
 
     /* Slew commands trigger callback if mask changed
