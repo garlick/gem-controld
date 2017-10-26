@@ -38,6 +38,15 @@ void lx200_set_goto_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
  */
 void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
 
+/* Register callback that is triggered when protocol wants to know
+ * tracking rate.  Callback should call lx200_set_tracking ().
+ */
+void lx200_set_tracking_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg);
+
+/* Update tracking rate in degress per second.
+ */
+void lx200_set_tracking_rate (struct lx200 *lx, double dps);
+
 /* Set t,d position in degrees.
  */
 void lx200_set_position_ha (struct lx200 *lx, double t);

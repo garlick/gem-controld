@@ -73,11 +73,13 @@ struct lx200 {
     struct callback slew;
     struct callback gto;
     struct callback stop;
+    struct callback tracking;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
     int slew_rate;
+    double tracking_rate; // RA degrees/sec
     struct point *point;
     struct ev_loop *loop;
 };
@@ -199,10 +201,13 @@ static int process_command (struct client *c, const char *cmd)
         rc = wpf (c, "%s#", "site 1 name"); // XXX lookup in config?
     }
     /* :GT# - get tracking rate (returns TT.T#)
-     * In Hz where 60.0 Hz = 1 rev/24h
+     * In Hz where 60.0 Hz = 360deg / 86400s
      */
     else if (!strcmp (cmd, ":GT#")) {
-        rc = wpf (c, "%2.1f#", 60.0); // XXX
+        if (c->lx->tracking.cb)
+            c->lx->tracking.cb (c->lx, c->lx->tracking.arg);
+        // Hz = 6deg / 86400s = (6.9444E-5) deg/s
+        rc = wpf (c, "%2.1f#", c->lx->tracking_rate * 6.9444E-5);
     }
     /* :Gt# - get current site latitude (returns sDD*MM#)
      * (pos is north)
@@ -540,6 +545,18 @@ void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
     lx->stop.cb = cb;
     lx->stop.arg = arg;
+}
+
+void lx200_set_tracking_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
+
+{
+    lx->tracking.cb = cb;
+    lx->tracking.arg = arg;
+}
+
+void lx200_set_tracking_rate (struct lx200 *lx, double dps)
+{
+    lx->tracking_rate = dps;
 }
 
 int lx200_init (struct lx200 *lx, int port, int flags)
