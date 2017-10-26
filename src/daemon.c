@@ -74,6 +74,7 @@ void lx200_pos_dec_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_stop_cb (struct lx200 *lx, void *arg);
+void lx200_tracking_cb (struct lx200 *lx, void *arg);
 
 int controller_velocity (struct config_axis *axis, double degrees_persec);
 
@@ -195,6 +196,7 @@ int main (int argc, char *argv[])
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
     lx200_set_goto_cb (ctx.lx200, lx200_goto_cb, &ctx);
     lx200_set_stop_cb (ctx.lx200, lx200_stop_cb, &ctx);
+    lx200_set_tracking_cb (ctx.lx200, lx200_tracking_cb, &ctx);
     lx200_start (ctx.loop, ctx.lx200);
 
     ev_run (ctx.loop, 0);
@@ -504,6 +506,14 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
         if (motion_abort (ctx->d) < 0)
             err ("t: abort");
     }
+}
+
+/* LX200 protocol wants to know current RA tracking rate.
+ */
+void lx200_tracking_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    lx200_set_tracking_rate (lx, ctx->t_tracking ? ctx->opt.t.sidereal : 0);
 }
 
 /* Motion axis informs us that goto has completed.
