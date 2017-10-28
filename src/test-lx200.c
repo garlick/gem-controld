@@ -33,6 +33,11 @@
 #include "configfile.h"
 #include "lx200.h"
 
+struct test_state {
+    double t;       // ha position in degrees
+    double d;       // dec position in degrees
+};
+
 #define OPTIONS "+c:h"
 static const struct option longopts[] = {
     {"config",               required_argument, 0, 'c'},
@@ -40,6 +45,8 @@ static const struct option longopts[] = {
     {0, 0, 0, 0},
 };
 
+void lx200_tracking_cb (struct lx200 *lx, void *arg);
+void lx200_stop_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_pos_ha_cb (struct lx200 *lx, void *arg);
@@ -62,8 +69,10 @@ int main (int argc, char *argv[])
     struct lx200 *lx;
     char *prog;
     struct ev_loop *loop;
+    struct test_state ctx;
 
     memset (&cfg, 0, sizeof (cfg));
+    memset (&ctx, 0, sizeof (ctx));
 
     prog = basename (argv[0]);
     log_init (prog);
@@ -88,10 +97,12 @@ int main (int argc, char *argv[])
     lx = lx200_new ();
     if (lx200_init (lx, DEFAULT_LX200_PORT, LX200_DEBUG) < 0)
         err_exit ("hpad_init");
-    lx200_set_position_ha_cb (lx, lx200_pos_ha_cb, NULL);
-    lx200_set_position_dec_cb (lx, lx200_pos_dec_cb, NULL);
-    lx200_set_slew_cb (lx, lx200_slew_cb, NULL);
-    lx200_set_goto_cb (lx, lx200_goto_cb, NULL);
+    lx200_set_position_ha_cb (lx, lx200_pos_ha_cb, &ctx);
+    lx200_set_position_dec_cb (lx, lx200_pos_dec_cb, &ctx);
+    lx200_set_slew_cb (lx, lx200_slew_cb, &ctx);
+    lx200_set_slew_cb (lx, lx200_slew_cb, &ctx);
+    lx200_set_stop_cb (lx, lx200_stop_cb, &ctx);
+    lx200_set_tracking_cb (lx, lx200_tracking_cb, &ctx);
     lx200_start (loop, lx);
     msg ("lx200 configured");
 
@@ -105,14 +116,18 @@ int main (int argc, char *argv[])
     return 0;
 }
 
+/* lx200 needs position update
+ */
 void lx200_pos_ha_cb (struct lx200 *lx, void *arg)
 {
-    lx200_set_position_ha (lx, 0.);
+    struct test_state *ctx = arg;
+    lx200_set_position_ha (lx, ctx->t);
 }
 
 void lx200_pos_dec_cb (struct lx200 *lx, void *arg)
 {
-    lx200_set_position_dec (lx, 0.);
+    struct test_state *ctx = arg;
+    lx200_set_position_dec (lx, ctx->d);
 }
 
 void lx200_slew_cb (struct lx200 *lx, void *arg)
@@ -123,9 +138,20 @@ void lx200_slew_cb (struct lx200 *lx, void *arg)
 
 void lx200_goto_cb (struct lx200 *lx, void *arg)
 {
+    struct test_state *ctx = arg;
     double t, d;
 
     lx200_get_target (lx, &t, &d);
+    ctx->t = t; // instantaneous goto - whee!
+    ctx->d = d;
+}
+
+void lx200_stop_cb (struct lx200 *lx, void *arg)
+{
+}
+
+void lx200_tracking_cb (struct lx200 *lx, void *arg)
+{
 }
 
 /*
