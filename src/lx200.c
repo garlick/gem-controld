@@ -73,11 +73,13 @@ struct lx200 {
     struct callback slew;
     struct callback gto;
     struct callback stop;
+    struct callback tracking;
     ev_io listen_w;
     struct client clients[MAX_CLIENTS];
     double t, d; // axis angular position (degrees)
     int slew_mask;
     int slew_rate;
+    double tracking_rate; // RA degrees/sec
     struct point *point;
     struct ev_loop *loop;
 };
@@ -199,10 +201,13 @@ static int process_command (struct client *c, const char *cmd)
         rc = wpf (c, "%s#", "site 1 name"); // XXX lookup in config?
     }
     /* :GT# - get tracking rate (returns TT.T#)
-     * In Hz where 60.0 Hz = 1 rev/24h
+     * In Hz where 60.0 Hz = 360deg / 86400s
      */
     else if (!strcmp (cmd, ":GT#")) {
-        rc = wpf (c, "%2.1f#", 60.0); // XXX
+        if (c->lx->tracking.cb)
+            c->lx->tracking.cb (c->lx, c->lx->tracking.arg);
+        // Hz = 6deg / 86400s = (6.9444E-5) deg/s
+        rc = wpf (c, "%2.1f#", c->lx->tracking_rate * 6.9444E-5);
     }
     /* :Gt# - get current site latitude (returns sDD*MM#)
      * (pos is north)
@@ -230,12 +235,22 @@ static int process_command (struct client *c, const char *cmd)
         point_get_gmtoff (c->lx->point, &offset);
         rc = wpf (c, "%+2.1f#", offset);
     }
-    /* :GL#  - get local time in 24 hour format (return HH:MM:SS#)
+    /* :GL# - get local time in 24 hour format (return HH:MM:SS#)
      */
     else if (!strcmp (cmd, ":GL#")) {
         int hr, min;
         double sec;
         point_get_localtime (c->lx->point, &hr, &min, &sec);
+        rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
+    }
+    /* :Ga# - get local time in 12 hour format (return HH:MM:SS#)
+     */
+    else if (!strcmp (cmd, ":Ga#")) {
+        int hr, min;
+        double sec;
+        point_get_localtime (c->lx->point, &hr, &min, &sec);
+        if (hr > 12)
+            hr -= 12;
         rc = wpf (c, "%.2d:%.2d:%.2d#", hr, min, (int)sec);
     }
     /* :GC# - get current date (returns MM/DD/YY#)
@@ -325,6 +340,16 @@ static int process_command (struct client *c, const char *cmd)
         else
             rc = write_all (c, "0", 1);
     }
+    /* :Gr# - get target object RA (returns HH:MM.T# or HH:MM:SS)
+     */
+    else if (!strcmp (cmd, ":Gr#")) {
+        // FIXME
+    }
+    /* :Gd# - get target object DEC (returns sDD*MM# or sDD*MM'SS#)
+     */
+    else if (!strcmp (cmd, ":Gd#")) {
+        // FIXME
+    }
     /* :CM# - sync telescope's position with currently slected db object coord
      */
     else if (!strcmp (cmd, ":CM#")) {
@@ -335,9 +360,11 @@ static int process_command (struct client *c, const char *cmd)
         point_set_position_ha (c->lx->point, c->lx->t);
         point_set_position_dec (c->lx->point, c->lx->d);
         point_sync_target (c->lx->point);
-        rc = wpf (c, "You Are Here#");
+        rc = wpf (c, "%s#", "You are here");
     }
-    /* :MS# - slew to target object
+    /* :MS# - slew to target object (returns 0 for success).
+     * Other responses 1<string># - error such as "object below horizon",
+     * 2<string># - other...
      */
     else if (!strcmp (cmd, ":MS#")) {
         if (c->lx->pos_ha.cb)
@@ -346,9 +373,7 @@ static int process_command (struct client *c, const char *cmd)
             c->lx->pos_dec.cb (c->lx, c->lx->pos_dec.arg); // update position d
         if (c->lx->gto.cb)
             c->lx->gto.cb (c->lx, c->lx->gto.arg);
-        rc = write_all (c, "0", 1); // 0 = sucess
-                                    // 1<string># - object below horizon
-                                    // 2<string># - other...
+        rc = write_all (c, "0", 1); // success
     }
 
     /* Slew commands trigger callback if mask changed
@@ -540,6 +565,18 @@ void lx200_set_stop_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
 {
     lx->stop.cb = cb;
     lx->stop.arg = arg;
+}
+
+void lx200_set_tracking_cb  (struct lx200 *lx, lx200_cb_f cb, void *arg)
+
+{
+    lx->tracking.cb = cb;
+    lx->tracking.arg = arg;
+}
+
+void lx200_set_tracking_rate (struct lx200 *lx, double dps)
+{
+    lx->tracking_rate = dps;
 }
 
 int lx200_init (struct lx200 *lx, int port, int flags)

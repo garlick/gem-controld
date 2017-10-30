@@ -74,6 +74,7 @@ void lx200_pos_dec_cb (struct lx200 *lx, void *arg);
 void lx200_slew_cb (struct lx200 *lx, void *arg);
 void lx200_goto_cb (struct lx200 *lx, void *arg);
 void lx200_stop_cb (struct lx200 *lx, void *arg);
+void lx200_tracking_cb (struct lx200 *lx, void *arg);
 
 int controller_velocity (struct config_axis *axis, double degrees_persec);
 
@@ -195,6 +196,7 @@ int main (int argc, char *argv[])
     lx200_set_slew_cb (ctx.lx200, lx200_slew_cb, &ctx);
     lx200_set_goto_cb (ctx.lx200, lx200_goto_cb, &ctx);
     lx200_set_stop_cb (ctx.lx200, lx200_stop_cb, &ctx);
+    lx200_set_tracking_cb (ctx.lx200, lx200_tracking_cb, &ctx);
     lx200_start (ctx.loop, ctx.lx200);
 
     ev_run (ctx.loop, 0);
@@ -337,13 +339,31 @@ void slew_update (struct prog_context *ctx, int newmask, int rate)
     ctx->slew = newmask;
 }
 
+/* After toggling t_tracking, or completion of a goto,
+ * ensure that motion has (re-)enabled or disabled RA tracking
+ * as appropraite.
+ */
+void update_tracking (struct prog_context *ctx)
+{
+    double dps;
+
+    if (ctx->t_tracking) {
+        dps = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false, true);
+        if (motion_move_constant_dps (ctx->t, dps) < 0)
+            err ("t: move at v=%.1lf*/s", dps);
+    }
+    else {
+         if (motion_soft_stop (ctx->t) < 0)
+            err ("t: stop");
+    }
+}
+
 void hpad_cb (struct hpad *h, void *arg)
 {
     struct prog_context *ctx = arg;
     int dir = hpad_get_slew_direction (h);
     int rate = hpad_get_slew_rate (h);
     int ctrl = hpad_get_control (h);
-    double dps;
 
     /* M1 - emergency stop
      */
@@ -366,21 +386,8 @@ void hpad_cb (struct hpad *h, void *arg)
     /* M2 - toggle tracking
      */
     if ((ctrl & HPAD_CONTROL_M2)) {
-        if (ctx->t_tracking) {
-            if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
-                if (motion_soft_stop (ctx->t) < 0)
-                    err ("t: stop");
-            }
-            ctx->t_tracking = false;
-        }
-        else {
-            if (!(ctx->slew & SLEW_RA_PLUS) && !(ctx->slew & SLEW_RA_MINUS)) {
-                dps = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false, true);
-                if (motion_move_constant_dps (ctx->t, dps) < 0)
-                    err ("t: move at v=%.1lf*/s", dps);
-            }
-            ctx->t_tracking = true;
-        }
+        ctx->t_tracking = !ctx->t_tracking;
+        update_tracking (ctx);
         return;
     }
     /* N,S,E,W
@@ -489,6 +496,7 @@ void lx200_goto_cb (struct lx200 *lx, void *arg)
 }
 
 /* LX200 protocol wants to stop all motion (abort a goto).
+ * Tracking should continue.
  */
 void lx200_stop_cb (struct lx200 *lx, void *arg)
 {
@@ -504,6 +512,16 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
         if (motion_abort (ctx->d) < 0)
             err ("t: abort");
     }
+    if (ctx->t_tracking)
+        update_tracking (ctx);
+}
+
+/* LX200 protocol wants to know current RA tracking rate.
+ */
+void lx200_tracking_cb (struct lx200 *lx, void *arg)
+{
+    struct prog_context *ctx = arg;
+    lx200_set_tracking_rate (lx, ctx->t_tracking ? ctx->opt.t.sidereal : 0);
 }
 
 /* Motion axis informs us that goto has completed.
@@ -514,14 +532,10 @@ void lx200_stop_cb (struct lx200 *lx, void *arg)
 void motion_cb (struct motion *m, void *arg)
 {
     struct prog_context *ctx = arg;
-    double dps;
 
     msg ("%s: goto end", motion_get_name (m));
-    if (ctx->t_tracking && m == ctx->t) {
-        dps = lookup_rate (&ctx->opt.t, SLEW_RATE_NONE, false, true);
-        if (motion_move_constant_dps (ctx->t, dps) < 0)
-            err ("t: move at v=%.1lf*/s", dps);
-    }
+    if (m == ctx->t && ctx->t_tracking)
+        update_tracking (ctx);
 }
 
 /*
