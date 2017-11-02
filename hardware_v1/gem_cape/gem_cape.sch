@@ -6,7 +6,7 @@
 <setting alwaysvectorfont="no"/>
 <setting verticaltext="up"/>
 </settings>
-<grid distance="0.1" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
+<grid distance="0.05" unitdist="inch" unit="inch" style="lines" multiple="1" display="no" altdistance="0.01" altunitdist="inch" altunit="inch"/>
 <layers>
 <layer number="1" name="Top" color="4" fill="1" visible="no" active="no"/>
 <layer number="2" name="Route2" color="1" fill="3" visible="no" active="no"/>
@@ -4254,6 +4254,15 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <text x="109.22" y="68.58" size="1.778" layer="91">gpio71</text>
 <text x="109.22" y="71.12" size="1.778" layer="91">gpio73</text>
 <text x="101.6" y="68.58" size="1.778" layer="91">gpio70</text>
+<text x="104.14" y="39.37" size="1.778" layer="91" font="fixed">rate   x</text>
+<text x="104.14" y="36.83" size="1.778" layer="91" font="fixed">M1       x   x</text>
+<text x="104.14" y="34.29" size="1.778" layer="91" font="fixed">M2       x x </text>
+<text x="104.14" y="43.18" size="1.778" layer="91" font="fixed">Key    3 2 1 0</text>
+<text x="104.14" y="31.75" size="1.778" layer="91" font="fixed">N            x</text>
+<text x="104.14" y="29.21" size="1.778" layer="91" font="fixed">S          x</text>
+<text x="104.14" y="26.67" size="1.778" layer="91" font="fixed">E        x</text>
+<text x="104.14" y="24.13" size="1.778" layer="91" font="fixed">W          x x</text>
+<text x="107.95" y="19.05" size="1.778" layer="91">Bartels hpad</text>
 </plain>
 <instances>
 <instance part="RA" gate="-1" x="20.32" y="167.64"/>
@@ -4663,6 +4672,20 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <pinref part="P9" gate="A" pin="21"/>
 <wire x1="175.26" y1="99.06" x2="157.48" y2="99.06" width="0.1524" layer="91"/>
 <label x="157.48" y="99.06" size="1.778" layer="95"/>
+</segment>
+</net>
+<net name="N$1" class="0">
+<segment>
+<wire x1="101.6" y1="45.72" x2="113.03" y2="45.72" width="0.1524" layer="91"/>
+<wire x1="113.03" y1="45.72" x2="125.73" y2="45.72" width="0.1524" layer="91"/>
+<wire x1="125.73" y1="45.72" x2="125.73" y2="41.91" width="0.1524" layer="91"/>
+<wire x1="125.73" y1="41.91" x2="125.73" y2="22.86" width="0.1524" layer="91"/>
+<wire x1="125.73" y1="22.86" x2="113.03" y2="22.86" width="0.1524" layer="91"/>
+<wire x1="113.03" y1="22.86" x2="101.6" y2="22.86" width="0.1524" layer="91"/>
+<wire x1="101.6" y1="22.86" x2="101.6" y2="41.91" width="0.1524" layer="91"/>
+<wire x1="101.6" y1="41.91" x2="101.6" y2="45.72" width="0.1524" layer="91"/>
+<wire x1="101.6" y1="41.91" x2="125.73" y2="41.91" width="0.1524" layer="91"/>
+<wire x1="113.03" y1="45.72" x2="113.03" y2="22.86" width="0.1524" layer="91"/>
 </segment>
 </net>
 </nets>
