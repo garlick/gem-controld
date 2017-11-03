@@ -4223,6 +4223,12 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <part name="R6" library="resistor" deviceset="R-EU_" device="R0805" value="220"/>
 <part name="R7" library="resistor" deviceset="R-EU_" device="R0805" value="220"/>
 <part name="R8" library="resistor" deviceset="R-EU_" device="R0805" value="220"/>
+<part name="GND6" library="supply1" deviceset="GND" device=""/>
+<part name="GND7" library="supply1" deviceset="GND" device=""/>
+<part name="GND8" library="supply1" deviceset="GND" device=""/>
+<part name="GND9" library="supply1" deviceset="GND" device=""/>
+<part name="+3V4" library="supply1" deviceset="+3V3" device=""/>
+<part name="+3V5" library="supply1" deviceset="+3V3" device=""/>
 </parts>
 <sheets>
 <sheet>
@@ -4317,6 +4323,12 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <instance part="R6" gate="G$1" x="45.72" y="30.48"/>
 <instance part="R7" gate="G$1" x="55.88" y="27.94"/>
 <instance part="R8" gate="G$1" x="66.04" y="25.4"/>
+<instance part="GND6" gate="1" x="88.9" y="58.42"/>
+<instance part="GND7" gate="1" x="129.54" y="58.42"/>
+<instance part="GND8" gate="1" x="172.72" y="58.42"/>
+<instance part="GND9" gate="1" x="213.36" y="58.42"/>
+<instance part="+3V4" gate="G$1" x="215.9" y="134.62"/>
+<instance part="+3V5" gate="G$1" x="170.18" y="134.62"/>
 </instances>
 <busses>
 </busses>
@@ -4354,6 +4366,43 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <wire x1="25.4" y1="22.86" x2="25.4" y2="38.1" width="0.1524" layer="91"/>
 <junction x="25.4" y="38.1"/>
 </segment>
+<segment>
+<wire x1="176.53" y1="68.58" x2="172.72" y2="68.58" width="0.1524" layer="91"/>
+<wire x1="172.72" y1="68.58" x2="172.72" y2="60.96" width="0.1524" layer="91"/>
+<wire x1="176.53" y1="71.12" x2="172.72" y2="71.12" width="0.1524" layer="91"/>
+<wire x1="172.72" y1="71.12" x2="172.72" y2="68.58" width="0.1524" layer="91"/>
+<junction x="172.72" y="68.58"/>
+<pinref part="P9" gate="A" pin="1"/>
+<wire x1="175.26" y1="124.46" x2="172.72" y2="124.46" width="0.1524" layer="91"/>
+<wire x1="172.72" y1="124.46" x2="172.72" y2="71.12" width="0.1524" layer="91"/>
+<junction x="172.72" y="71.12"/>
+<pinref part="GND8" gate="1" pin="GND"/>
+</segment>
+<segment>
+<pinref part="P9" gate="A" pin="46"/>
+<wire x1="210.82" y1="68.58" x2="213.36" y2="68.58" width="0.1524" layer="91"/>
+<pinref part="P9" gate="A" pin="44"/>
+<wire x1="213.36" y1="68.58" x2="213.36" y2="60.96" width="0.1524" layer="91"/>
+<wire x1="210.82" y1="71.12" x2="213.36" y2="71.12" width="0.1524" layer="91"/>
+<wire x1="213.36" y1="71.12" x2="213.36" y2="68.58" width="0.1524" layer="91"/>
+<junction x="213.36" y="68.58"/>
+<pinref part="P9" gate="A" pin="2"/>
+<wire x1="210.82" y1="124.46" x2="213.36" y2="124.46" width="0.1524" layer="91"/>
+<wire x1="213.36" y1="124.46" x2="213.36" y2="71.12" width="0.1524" layer="91"/>
+<junction x="213.36" y="71.12"/>
+<pinref part="GND9" gate="1" pin="GND"/>
+</segment>
+<segment>
+<wire x1="125.73" y1="124.46" x2="129.54" y2="124.46" width="0.1524" layer="91"/>
+<wire x1="129.54" y1="124.46" x2="129.54" y2="60.96" width="0.1524" layer="91"/>
+<pinref part="GND7" gate="1" pin="GND"/>
+</segment>
+<segment>
+<pinref part="P8" gate="A" pin="1"/>
+<wire x1="91.44" y1="124.46" x2="88.9" y2="124.46" width="0.1524" layer="91"/>
+<wire x1="88.9" y1="124.46" x2="88.9" y2="60.96" width="0.1524" layer="91"/>
+<pinref part="GND6" gate="1" pin="GND"/>
+</segment>
 </net>
 <net name="GUIDE-RA-" class="0">
 <segment>
@@ -4370,8 +4419,8 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <net name="GUIDE-DEC-" class="0">
 <segment>
 <pinref part="P8" gate="A" pin="46"/>
-<wire x1="127" y1="68.58" x2="142.24" y2="68.58" width="0.1524" layer="91"/>
-<label x="129.54" y="68.58" size="1.778" layer="95"/>
+<wire x1="127" y1="68.58" x2="146.05" y2="68.58" width="0.1524" layer="91"/>
+<label x="130.81" y="68.58" size="1.778" layer="95"/>
 </segment>
 <segment>
 <pinref part="R2" gate="G$1" pin="2"/>
@@ -4394,8 +4443,8 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <net name="GUIDE-RA+" class="0">
 <segment>
 <pinref part="P8" gate="A" pin="44"/>
-<wire x1="127" y1="71.12" x2="142.24" y2="71.12" width="0.1524" layer="91"/>
-<label x="129.54" y="71.12" size="1.778" layer="95"/>
+<wire x1="127" y1="71.12" x2="146.05" y2="71.12" width="0.1524" layer="91"/>
+<label x="130.81" y="71.12" size="1.778" layer="95"/>
 </segment>
 <segment>
 <pinref part="R4" gate="G$1" pin="2"/>
@@ -4418,9 +4467,9 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <net name="HBOX2" class="0">
 <segment>
 <wire x1="124.46" y1="116.84" x2="127" y2="116.84" width="0.1524" layer="91"/>
-<label x="129.54" y="116.84" size="1.778" layer="95"/>
+<label x="132.08" y="116.84" size="1.778" layer="95"/>
 <pinref part="P8" gate="A" pin="8"/>
-<wire x1="127" y1="116.84" x2="142.24" y2="116.84" width="0.1524" layer="91"/>
+<wire x1="127" y1="116.84" x2="144.78" y2="116.84" width="0.1524" layer="91"/>
 </segment>
 <segment>
 <pinref part="R6" gate="G$1" pin="2"/>
@@ -4443,8 +4492,8 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <net name="HBOX0" class="0">
 <segment>
 <pinref part="P8" gate="A" pin="10"/>
-<wire x1="127" y1="114.3" x2="142.24" y2="114.3" width="0.1524" layer="91"/>
-<label x="129.54" y="114.3" size="1.778" layer="95"/>
+<wire x1="127" y1="114.3" x2="144.78" y2="114.3" width="0.1524" layer="91"/>
+<label x="132.08" y="114.3" size="1.778" layer="95"/>
 </segment>
 <segment>
 <pinref part="R8" gate="G$1" pin="2"/>
@@ -4472,6 +4521,17 @@ Source: http://www.mouser.com/ds/2/392/products_18-2245.pdf</description>
 <wire x1="27.94" y1="35.56" x2="88.9" y2="35.56" width="0.1524" layer="91"/>
 <wire x1="27.94" y1="53.34" x2="27.94" y2="35.56" width="0.1524" layer="91"/>
 <junction x="27.94" y="35.56"/>
+</segment>
+<segment>
+<pinref part="P9" gate="A" pin="4"/>
+<pinref part="+3V4" gate="G$1" pin="+3V3"/>
+<wire x1="210.82" y1="121.92" x2="215.9" y2="121.92" width="0.1524" layer="91"/>
+<wire x1="215.9" y1="121.92" x2="215.9" y2="132.08" width="0.1524" layer="91"/>
+</segment>
+<segment>
+<wire x1="176.53" y1="121.92" x2="170.18" y2="121.92" width="0.1524" layer="91"/>
+<wire x1="170.18" y1="121.92" x2="170.18" y2="132.08" width="0.1524" layer="91"/>
+<pinref part="+3V5" gate="G$1" pin="+3V3"/>
 </segment>
 </net>
 <net name="N$9" class="0">
